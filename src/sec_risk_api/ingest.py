@@ -18,8 +18,14 @@ def extract_text_from_html(html_path: str) -> str:
         raise FileNotFoundError(f"No HTM file found at {html_path}")
 
     try:
-        with open(path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except UnicodeDecodeError:
+            # Attempt 2: CP1252 (The legacy Windows fallback)
+            logger.warning(f"UTF-8 decode failed for {html_path}. Falling back to CP1252.")
+            with open(path, 'r', encoding='cp1252') as f:
+                content = f.read()
 
         # Use lxml for speed and better handling of malformed SEC tags
         soup = BeautifulSoup(content, "lxml")
