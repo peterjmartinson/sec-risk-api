@@ -1,41 +1,25 @@
-import os
 import pytest
-from sec_risk_api.ingest import extract_text_from_html
+from sec_risk_api.ingest import parse_sec_html, extract_text_from_file
 
+# 1. Pure Atomic Logic Tests (In-Memory)
+def test_parse_sec_html_removes_scripts():
+    html = "<html><body><script>alert('bad');</script>Target Text</body></html>"
+    result = parse_sec_html(html)
+    assert "alert" not in result
+    assert "Target Text" in result
 
-def test_extract_text_is_non_empty():
-    """
-    Win Condition: Successfully extract string content from an SEC PDF.
-    """
-    sample_path = "data/sample_10k.html"
+def test_parse_sec_html_separates_tags():
+    # Tests that <div>s don't result in mashedwords
+    html = "<div>Word1</div><div>Word2</div>"
+    result = parse_sec_html(html)
+    assert result == "Word1 Word2"
 
-    # Check if the user (you) has provided the loot (data)
-    if not os.path.exists(sample_path):
-        pytest.skip(f"Level blocked: Please place a 10-K PDF at {sample_path}")
-
-    text = extract_text_from_html(sample_path)
-
-    assert isinstance(text, str)
-    assert len(text) > 500  # A real 10-K is never just a few words
-    assert "Item 1A" in text or "ITEM 1A" in text
-
-
-def test_extract_text_is_functional():
-    """
-    Win Condition: Extraction returns a string with expected 10-K markers from HTM.
-    """
-    sample_path = "data/sample_10k.html"
-
-    # Requirement: You must have an HTM in data/ for this to pass
-    if not os.path.exists(sample_path):
-        pytest.fail("Combat aborted: Place an SEC HTM at data/sample_10k.htm first.")
-
-    text = extract_text_from_html(sample_path)
-
-    assert isinstance(text, str)
-    assert len(text) > 1000  # Ensuring it's not a skeleton
-
-    # Validation of SEC content markers
-    upper_text = text.upper()
-    assert any(term in upper_text for term in ["FORM 10-K", "ANNUAL REPORT"])
-    assert "ITEM 1A" in upper_text
+# 2. IO / Integration Test (Using tmp_path)
+def test_extract_text_from_file_handles_encoding(tmp_path):
+    # Create a file with a non-UTF-8 character
+    p = tmp_path / "legacy.html"
+    # Writing a character that might trigger encoding issues
+    p.write_bytes("<html><body>Item 1A ©</body></html>".encode('cp1252'))
+    
+    result = extract_text_from_file(p)
+    assert "Item 1A" in result
