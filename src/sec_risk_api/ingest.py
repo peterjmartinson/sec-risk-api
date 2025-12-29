@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 from pathlib import Path
 import logging
 import re
+from sec_risk_api.processing import chunk_risk_section
 
 # Setup basic logging
 logging.basicConfig(level=logging.INFO)
@@ -52,11 +53,6 @@ def extract_text_from_file(html_path: str | Path) -> str:
         logger.error(f"Failed to process HTM file {html_path}: {e}")
         raise
 
-import re
-import logging
-
-logger = logging.getLogger(__name__)
-
 def slice_risk_factors(text: str) -> str:
     """
     Slices the 'Item 1A' section from the full text.
@@ -90,3 +86,31 @@ def slice_risk_factors(text: str) -> str:
 
     logger.info("Item 1A found but no end marker detected. Slicing from 1A to EOF.")
     return text[start_match.start() :].strip()
+
+def run_ingestion_pipeline(html_content: str, ticker: str, year: int) -> str:
+    """
+    Orchestrates the flow from raw HTML to Vector DB atoms.
+    """
+    # 1. Extraction: From raw HTML to clean 'Item 1A' text
+    # We modularize the calls to your existing logic
+    full_text = parse_sec_html(html_content)
+    risk_text = slice_risk_factors(full_text)
+
+    if not risk_text or len(risk_text) < 100:
+        logger.warning(f"Risk section for {ticker} seems suspiciously short or missing.")
+        # Return or handle error as per your preference
+
+    # 2. Chunking: From long text to metadata-tagged atoms (Subissue 1.0)
+    metadata = {
+        "ticker": ticker,
+        "year": year,
+        "item_type": "1A"
+    }
+    chunks = chunk_risk_section(risk_text, metadata)
+
+    # 3. Storage & Embeddings (Subissue 1.1 & 1.2)
+    # Placeholder for the upcoming 'Vault' logic
+    # upsert_to_vault(chunks)
+
+    logger.info(f"Pipeline: Processed {len(chunks)} chunks for {ticker} {year}")
+    return f"Processed {len(chunks)} chunks for {ticker}"
