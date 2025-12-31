@@ -210,3 +210,4 @@ __marimo__/
 .*.sw*
 .sw*
 docs/*
+chroma_db/*
