@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = [
     "beautifulsoup4>=4.12.0",
     "lxml>=5.0.0",
-    "requests>=2.31.0", # You'll need this to actually fetch the EDGAR files
+    "requests>=2.31.0",
     "chromadb>=0.4.0",
     "pytest>=8.0.0",
     "langchain-text-splitters>=1.1.0",
@@ -24,13 +24,29 @@ build-backend = "hatchling.build"
 dev = [
     "flake8>=7.0.0",
     "mypy>=1.9.0",
-    "types-requests", # Helps mypy understand requests
-    "types-beautifulsoup4", # Helps mypy understand bs4
+    "types-requests",
+    "types-beautifulsoup4",
 ]
 
 [tool.mypy]
 python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true # Force yourself to use types for stability
-ignore_missing_imports = true # Stops it from yelling about libs without type stubs
+
+# --- Global Strictness Settings ---
+disallow_untyped_defs = true    # Force type hints on all functions
+check_untyped_defs = true       # Check bodies of untyped functions
+no_implicit_optional = true     # Force explicit Optional[X] or X | None
+warn_return_any = true          # Warn when returning a value of type Any
+warn_unused_configs = true      # Warn about unused config sections
+warn_unused_ignores = true      # Warn about unnecessary '# type: ignore' comments
+
+# --- Third-Party Library Overrides ---
+# These libraries either don't have type stubs or have incomplete ones.
+# We silence 'missing import' errors specifically for these modules.
+[[tool.mypy.overrides]]
+module = [
+    "chromadb.*",
+    "bs4.*",
+    "langchain_text_splitters.*",
+    "lxml.*"
+]
+ignore_missing_imports = true
