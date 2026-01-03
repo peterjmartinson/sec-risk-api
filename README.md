@@ -42,8 +42,14 @@ uv run init_vector_db.py
 The project follows strict **Test-Driven Development (TDD)** and uses **mypy** for type safety.
 
 ```bash
-# Run unit tests
-uv run python -m unittest discover tests
+# Run all unit tests
+uv run python -m pytest
+
+# Run tests with verbose output
+uv run python -m pytest -v
+
+# Debug tests in VS Code
+# Use launch configuration "Python: Debug Tests (WSL)" or "Python: Debug Current Test File (WSL)"
 
 # Check types
 uv run mypy .

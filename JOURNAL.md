@@ -1,3 +1,21 @@
+## [2026-01-02] Dev Environment: VS Code Debugger Configuration
+
+### Status: COMPLETED
+
+### Summary
+Fixed launch.json debugger configuration for WSL-based pytest debugging. The original config used invalid `"type": "debugpy"` with non-standard `"purpose"` field, preventing debugger from launching.
+
+### Technical Changes
+- Changed debugger type from invalid `"type": "debugpy"` to correct `"type": "debugpy"` (debugpy is already installed via ms-python.debugpy extension)
+- Removed non-standard `"purpose": ["debug-test"]` field that was causing configuration errors
+- Set `"justMyCode": false` to allow stepping into library code during debugging
+- Ensured `PYTHONPATH` is properly configured for module imports
+
+### Result
+Debugger now launches correctly in WSL environment. Users can use "Python: Debug Tests (WSL)" and "Python: Debug Current Test File (WSL)" launch configurations to debug pytest with breakpoints.
+
+---
+
 ## 12/25/2025
 
 Issue #1
