@@ -18,8 +18,8 @@ def initialize_chroma(persist_path: str = "./chroma_db") -> Tuple[ClientAPI, Col
         instance.
     """
     # Ensure the directory exists for WSL persistence
-    if not os.path.exists(persist_path):
-        os.makedirs(persist_path)
+    # Use exist_ok=True to avoid FileExistsError if directory already exists
+    os.makedirs(persist_path, exist_ok=True)
 
     # Initialize Persistent Client
     client: ClientAPI = chromadb.PersistentClient(path=persist_path)

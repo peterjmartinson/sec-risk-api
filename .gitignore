@@ -211,3 +211,4 @@ __marimo__/
 .sw*
 docs/*
 chroma_db/*
+.vscode/*
