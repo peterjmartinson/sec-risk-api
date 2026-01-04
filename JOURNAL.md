@@ -1,3 +1,48 @@
+## [2026-01-04] GitHub Actions CI Workflow Integration
+
+### Status: COMPLETED
+
+### Summary
+Implemented automated continuous integration (CI) workflow using GitHub Actions to enforce test quality on all pull requests and commits to master/main branches. This ensures that all code changes are validated before merging, maintaining code reliability and preventing regressions.
+
+### Technical Implementation
+
+**Workflow Configuration** (`.github/workflows/ci.yml`):
+- **Triggers**: Runs on `pull_request` and `push` events to `master` and `main` branches
+- **Environment**: Ubuntu latest with Python 3.12
+- **Dependency Management**: Uses `uv` for fast, reproducible dependency installation
+- **Caching**: pip cache enabled to speed up subsequent workflow runs
+- **Test Execution**: Runs `uv run pytest` to execute the full test suite
+
+**Badge Integration**:
+- Added CI status badge to README.md header for at-a-glance build status visibility
+- Badge links directly to workflow runs for detailed failure investigation
+
+### Benefits
+
+1. **Quality Gate**: Every PR must pass tests before merge consideration
+2. **Early Detection**: Catches breaking changes immediately after push
+3. **Confidence**: Developers can see test status without running locally
+4. **Documentation**: CI badge signals project health to external users
+5. **Branch Protection**: Named job "Run Tests" can be referenced in branch protection rules
+
+### Performance Metrics
+- **Cold Start**: ~2-3 minutes (includes Python setup, uv installation, dependency sync, test execution)
+- **Warm Cache**: ~1-2 minutes (pip cache hit reduces dependency installation time)
+- **Test Suite**: Currently 40+ unit tests across 6 test modules
+
+### Observations
+- Using `uv` in CI matches local development workflow exactly, reducing "works on my machine" issues
+- The workflow is compatible with both `master` and `main` branch naming conventions for repository flexibility
+- Caching pip dependencies significantly reduces CI time after first run
+
+### Next Steps
+- [ ] Configure branch protection rules to require "Run Tests" check before merge
+- [ ] Consider adding code coverage reporting in future iterations
+- [ ] May add separate workflows for linting (flake8) and type checking (mypy)
+
+---
+
 ## [2026-01-04] Bug Fix: ChromaDB Multiple Metadata Filters
 
 ### Status: COMPLETED

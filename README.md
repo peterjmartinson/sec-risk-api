@@ -1,5 +1,7 @@
 # Scream Sheet: Proprietary Risk Scoring API
 
+[![CI](https://github.com/peterjmartinson/sec-risk-api/actions/workflows/ci.yml/badge.svg)](https://github.com/peterjmartinson/sec-risk-api/actions/workflows/ci.yml)
+
 A RAG-powered pipeline designed to quantify novelty and severity in SEC **Item
 1A: Risk Factors** disclosures. This system ingests structured HTML/XBRL
 filings, extracts specific risk sections, and indexes them into a
