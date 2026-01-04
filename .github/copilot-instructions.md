@@ -37,3 +37,4 @@ Strictly adhere to these principles for every interaction:
 - When asked to implement a feature, first output the **unit test** (adhering to SRP).
 - Provide the implementation with full type hints.
 - Conclude with a draft entry for `JOURNAL.md`.
+- If you cannot directly modify a file, remind the user to USE AGENT MODE.
