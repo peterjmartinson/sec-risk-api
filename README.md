@@ -14,7 +14,27 @@ The application follows a modular "Extraction-to-Storage" flow:
 3. **Embedding Engine (`embeddings.py`)**: Converts text chunks into 384-dimensional semantic vectors using the `all-MiniLM-L6-v2` sentence transformer model.
 4. **The Vault (`init_vector_db.py`)**: A persistent **Chroma DB** instance utilizing **HNSW** indexing with a **Cosine Similarity** metric. Storage path: `./chroma_db/`
 5. **Reranking Layer (`reranking.py`)**: Cross-encoder model (`ms-marco-MiniLM-L-6-v2`) that reranks search results for improved relevance. Processes query-document pairs jointly for superior accuracy.
-6. **Orchestration Layer (`indexing_pipeline.py`)**: End-to-end pipeline coordinator that integrates extraction, chunking, embedding, storage, and hybrid search with optional reranking.
+6. **Risk Classification (`risk_taxonomy.py`, `prompt_manager.py`)**: Proprietary 10-category risk taxonomy with version-controlled LLM prompts for semantic classification.
+7. **Orchestration Layer (`indexing_pipeline.py`)**: End-to-end pipeline coordinator that integrates extraction, chunking, embedding, storage, and hybrid search with optional reranking.
+
+### Risk Taxonomy
+
+The system uses a proprietary 10-category classification for SEC risk factors:
+
+| Category | Description | Examples |
+|----------|-------------|----------|
+| **OPERATIONAL** | Internal execution risks | Supply chain, manufacturing, IT infrastructure |
+| **SYSTEMATIC** | Macroeconomic forces | Recession, inflation, market volatility |
+| **GEOPOLITICAL** | International conflicts | War, trade disputes, sanctions |
+| **REGULATORY** | Government compliance | New laws, regulations, policy changes |
+| **COMPETITIVE** | Market rivalry | Competition, pricing pressure, new entrants |
+| **TECHNOLOGICAL** | Innovation threats | Obsolescence, cybersecurity, disruption |
+| **HUMAN_CAPITAL** | Workforce risks | Talent retention, labor disputes, skill gaps |
+| **FINANCIAL** | Capital structure | Liquidity, debt, foreign exchange exposure |
+| **REPUTATIONAL** | Brand and trust | PR crises, ESG controversies, trust erosion |
+| **OTHER** | Miscellaneous | Company-specific edge cases |
+
+**Prompt Engineering**: Version-controlled system prompts in `prompts/` directory enforce structured classification with source citation requirements.
 
 ### Storage & Retrieval
 
