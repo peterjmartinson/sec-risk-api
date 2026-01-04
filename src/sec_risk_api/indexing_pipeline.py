@@ -14,6 +14,7 @@ from sec_risk_api.init_vector_db import initialize_chroma
 from sec_risk_api.ingest import extract_text_from_file, slice_risk_factors
 from sec_risk_api.processing import chunk_risk_section
 from sec_risk_api.embeddings import EmbeddingEngine
+from sec_risk_api.reranking import CrossEncoderReranker
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -58,10 +59,20 @@ class IndexingPipeline:
         # Initialize Embedding Engine
         self.embeddings = EmbeddingEngine(model_name=embedding_model)
         
+        # Lazy-load reranker (only initialize when needed)
+        self._reranker: Optional[CrossEncoderReranker] = None
+        
         logger.info(
             f"IndexingPipeline initialized: "
             f"persist_path={persist_path}, model={embedding_model}"
         )
+
+    @property
+    def reranker(self) -> CrossEncoderReranker:
+        """Lazy-load the cross-encoder reranker (only when needed)."""
+        if self._reranker is None:
+            self._reranker = CrossEncoderReranker()
+        return self._reranker
 
     def _generate_document_id(
         self,
@@ -204,38 +215,46 @@ class IndexingPipeline:
         self,
         query: str,
         n_results: int = 5,
-        where: Optional[Dict[str, Any]] = None
+        where: Optional[Dict[str, Any]] = None,
+        rerank: bool = False
     ) -> List[Dict[str, Any]]:
         """
-        Semantic search using embeddings in Chroma.
+        Hybrid semantic search with optional cross-encoder reranking.
         
-        This satisfies the Success Condition:
-        "A query for 'Geopolitical Instability' must successfully retrieve 
-        chunks discussing 'International Conflict' or 'War,' even if the 
-        exact words don't match."
+        Level 3.0 Enhancement:
+        - Combines vector similarity with metadata filtering
+        - Optional cross-encoder reranking for improved relevance
+        - Full source citation for every result
         
         Args:
             query: Natural language search query (e.g., "Geopolitical Instability")
             n_results: Number of results to return (default: 5)
-            where: Optional metadata filter (e.g., {"ticker": "AAPL"})
+            where: Optional metadata filter (e.g., {"ticker": "AAPL", "filing_year": 2025})
+            rerank: If True, apply cross-encoder reranking to improve relevance
         
         Returns:
             List of dictionaries with:
             {
-                "text": str,
-                "metadata": Dict[str, Any],
-                "distance": float
+                "id": str,              # Document ID
+                "text": str,            # Chunk text
+                "metadata": Dict,       # ticker, filing_year, item_type
+                "distance": float,      # Vector distance (lower = more similar)
+                "rerank_score": float   # (Optional) Cross-encoder score (higher = more relevant)
             }
         """
         try:
             # Generate embedding for the query
             query_embedding = self.embeddings.encode([query])[0].tolist()
             
+            # Determine retrieval count
+            # If reranking, retrieve more candidates for reranker to choose from
+            retrieval_count = n_results * 3 if rerank else n_results
+            
             # Search in Chroma
-            logger.info(f"Semantic search for: '{query}'")
+            logger.info(f"Semantic search for: '{query}' (rerank={rerank})")
             results = self.collection.query(
                 query_embeddings=[query_embedding],
-                n_results=n_results,
+                n_results=retrieval_count,
                 where=where,
                 include=["documents", "metadatas", "distances"]
             )
@@ -255,6 +274,16 @@ class IndexingPipeline:
                         "metadata": metadata,
                         "distance": float(distance)  # Lower distance = better match
                     })
+            
+            # Apply reranking if requested
+            if rerank and formatted_results:
+                logger.info(f"Reranking {len(formatted_results)} candidates...")
+                formatted_results = self.reranker.rerank(
+                    query=query,
+                    candidates=formatted_results,
+                    top_k=n_results
+                )
+                logger.info(f"Reranking complete. Returning top {len(formatted_results)} results")
             
             logger.info(f"Found {len(formatted_results)} results")
             return formatted_results

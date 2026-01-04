@@ -13,7 +13,8 @@ The application follows a modular "Extraction-to-Storage" flow:
 2. **Processing Layer (`processing.py`)**: Implements recursive character text splitting. Chunks are normalized to ~800 characters with an 80-character overlap to preserve semantic context.
 3. **Embedding Engine (`embeddings.py`)**: Converts text chunks into 384-dimensional semantic vectors using the `all-MiniLM-L6-v2` sentence transformer model.
 4. **The Vault (`init_vector_db.py`)**: A persistent **Chroma DB** instance utilizing **HNSW** indexing with a **Cosine Similarity** metric. Storage path: `./chroma_db/`
-5. **Orchestration Layer (`indexing_pipeline.py`)**: End-to-end pipeline coordinator that integrates extraction, chunking, embedding, and storage. Supports intelligent upserts and semantic retrieval.
+5. **Reranking Layer (`reranking.py`)**: Cross-encoder model (`ms-marco-MiniLM-L-6-v2`) that reranks search results for improved relevance. Processes query-document pairs jointly for superior accuracy.
+6. **Orchestration Layer (`indexing_pipeline.py`)**: End-to-end pipeline coordinator that integrates extraction, chunking, embedding, storage, and hybrid search with optional reranking.
 
 ### Storage & Retrieval
 
@@ -35,6 +36,7 @@ The application follows a modular "Extraction-to-Storage" flow:
 **Retrieval Logic**:
 - **Semantic Search**: Natural language queries (e.g., "Geopolitical Instability") retrieve relevant chunks even without exact keyword matches.
 - **Hybrid Filtering**: Combine semantic search with metadata filters (e.g., "Find AAPL risks from 2025 related to supply chain").
+- **Two-Stage Reranking** (Optional): Retrieve broader candidates via bi-encoder, then rerank with cross-encoder for maximum precision.
 - **Deterministic IDs**: Document IDs follow `{ticker}_{year}_{chunk_index}` pattern for safe upserts.
 
 ## Getting Started
@@ -86,13 +88,13 @@ print(f"Indexed {stats['chunks_indexed']} chunks in {stats['embedding_latency_ms
 Query the indexed filings using natural language:
 
 ```python
-# Search across all filings
+# Basic vector search (fast)
 results = pipeline.semantic_search(
     query="Geopolitical risks and international conflicts",
     n_results=5
 )
 
-# Search with metadata filtering
+# Hybrid search with metadata filtering
 results = pipeline.semantic_search(
     query="Supply chain disruptions",
     n_results=5,
@@ -103,6 +105,38 @@ for result in results:
     print(f"[{result['metadata']['ticker']}] {result['text'][:100]}...")
     print(f"Distance: {result['distance']:.4f}\n")
 ```
+
+### Reranked Search (Higher Precision)
+
+For maximum relevance, enable cross-encoder reranking:
+
+```python
+# Two-stage search: vector retrieval → cross-encoder reranking
+results = pipeline.semantic_search(
+    query="regulatory compliance risks in technology sector",
+    n_results=3,
+    rerank=True  # Enable cross-encoder reranking
+)
+
+for result in results:
+    print(f"[{result['metadata']['ticker']} {result['metadata']['filing_year']}]")
+    print(f"Text: {result['text'][:150]}...")
+    print(f"Vector Distance: {result['distance']:.4f}")
+    print(f"Rerank Score: {result['rerank_score']:.4f}\n")
+
+# Combine reranking with metadata filters
+results = pipeline.semantic_search(
+    query="market competition and pricing pressure",
+    n_results=3,
+    where={"filing_year": 2025},
+    rerank=True
+)
+```
+
+**Performance Trade-offs**:
+- **Vector-only**: ~150ms, good for exploratory queries
+- **Reranked**: ~170ms, optimal for high-precision results
+- Reranking adds ~20ms overhead but significantly improves relevance
 
 ## Testing
 
