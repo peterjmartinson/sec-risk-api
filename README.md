@@ -17,7 +17,8 @@ The application follows a modular "Extraction-to-Storage" flow:
 4. **The Vault (`init_vector_db.py`)**: A persistent **Chroma DB** instance utilizing **HNSW** indexing with a **Cosine Similarity** metric. Storage path: `./chroma_db/`
 5. **Reranking Layer (`reranking.py`)**: Cross-encoder model (`ms-marco-MiniLM-L-6-v2`) that reranks search results for improved relevance. Processes query-document pairs jointly for superior accuracy.
 6. **Risk Classification (`risk_taxonomy.py`, `prompt_manager.py`)**: Proprietary 10-category risk taxonomy with version-controlled LLM prompts for semantic classification.
-7. **Orchestration Layer (`indexing_pipeline.py`)**: End-to-end pipeline coordinator that integrates extraction, chunking, embedding, storage, and hybrid search with optional reranking.
+7. **Risk Scoring (`scoring.py`)**: Quantifies **Severity** (0.0-1.0) and **Novelty** (0.0-1.0) for risk disclosures using keyword analysis and semantic comparison with historical filings. Every score includes full source citation and human-readable explanation.
+8. **Orchestration Layer (`indexing_pipeline.py`)**: End-to-end pipeline coordinator that integrates extraction, chunking, embedding, storage, and hybrid search with optional reranking.
 
 ### Risk Taxonomy
 
@@ -159,6 +160,52 @@ results = pipeline.semantic_search(
 - **Vector-only**: ~150ms, good for exploratory queries
 - **Reranked**: ~170ms, optimal for high-precision results
 - Reranking adds ~20ms overhead but significantly improves relevance
+
+### Risk Scoring
+
+Quantify the **Severity** and **Novelty** of risk disclosures:
+
+```python
+from sec_risk_api.scoring import RiskScorer
+
+# Initialize scorer
+scorer = RiskScorer()
+
+# Score severity (how severe is this risk?)
+chunk = {
+    "text": "Catastrophic supply chain disruptions due to geopolitical conflicts",
+    "metadata": {"ticker": "AAPL", "filing_year": 2025, "item_type": "Item 1A"}
+}
+
+severity = scorer.calculate_severity(chunk)
+print(f"Severity: {severity.value:.2f}")
+print(f"Explanation: {severity.explanation}")
+print(f"Source: {severity.source_citation[:100]}...")
+
+# Score novelty (how new is this vs. historical filings?)
+historical_chunks = [
+    {"text": "Standard competition risks", "metadata": {"ticker": "AAPL", "filing_year": 2024}}
+]
+
+novelty = scorer.calculate_novelty(chunk, historical_chunks)
+print(f"Novelty: {novelty.value:.2f}")  # Higher = more novel
+print(f"Explanation: {novelty.explanation}")
+
+# Batch scoring for efficiency
+chunks = [...]  # Multiple chunks
+scores = scorer.calculate_severity_batch(chunks)
+```
+
+**Severity Scoring**:
+- Analyzes keyword presence (catastrophic, severe, critical, etc.)
+- Normalized to [0.0, 1.0] where 1.0 = catastrophic risk
+- Every score includes source citation and explanation
+
+**Novelty Scoring**:
+- Compares current chunk with historical filing embeddings
+- Measures semantic distance (cosine similarity)
+- Novelty = 1 - max_similarity (higher = more novel)
+- Edge case: No historical data → novelty = 1.0 (maximally novel)
 
 ## Testing
 
