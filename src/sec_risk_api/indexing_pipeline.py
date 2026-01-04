@@ -211,6 +211,37 @@ class IndexingPipeline:
             logger.error(f"Failed to index {html_path}: {e}")
             raise
 
+    def _prepare_where_clause(self, where: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Transform a flat dictionary of filters into ChromaDB's required format.
+        
+        ChromaDB requires explicit operators ($and, $or) when combining multiple filters.
+        This method auto-wraps multiple filters with $and for user convenience.
+        
+        Args:
+            where: Dictionary of field_name -> value pairs
+            
+        Returns:
+            ChromaDB-compatible where clause
+            
+        Examples:
+            {"ticker": "AAPL"} -> {"ticker": "AAPL"}  # Single filter, unchanged
+            {"ticker": "AAPL", "filing_year": 2025} -> {"$and": [{"ticker": "AAPL"}, {"filing_year": 2025}]}
+        """
+        if not where:
+            return {}
+        
+        # Check if already using operators ($and, $or, etc.)
+        if any(key.startswith("$") for key in where.keys()):
+            return where
+        
+        # Single filter: pass through as-is
+        if len(where) == 1:
+            return where
+        
+        # Multiple filters: wrap with $and
+        return {"$and": [{k: v} for k, v in where.items()]}
+
     def semantic_search(
         self,
         query: str,
@@ -250,12 +281,16 @@ class IndexingPipeline:
             # If reranking, retrieve more candidates for reranker to choose from
             retrieval_count = n_results * 3 if rerank else n_results
             
+            # Transform where clause for ChromaDB compatibility
+            # ChromaDB requires explicit $and operator for multiple filters
+            chroma_where = self._prepare_where_clause(where) if where else None
+            
             # Search in Chroma
             logger.info(f"Semantic search for: '{query}' (rerank={rerank})")
             results = self.collection.query(
                 query_embeddings=[query_embedding],
                 n_results=retrieval_count,
-                where=where,
+                where=chroma_where,
                 include=["documents", "metadatas", "distances"]
             )
             
