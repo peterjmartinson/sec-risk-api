@@ -19,6 +19,7 @@ from pathlib import Path
 import json
 
 from sec_risk_api.api import app
+from sec_risk_api.auth import key_manager
 
 
 # ============================================================================
@@ -29,6 +30,21 @@ from sec_risk_api.api import app
 def client() -> TestClient:
     """FastAPI test client."""
     return TestClient(app)
+
+
+@pytest.fixture
+def api_key() -> str:
+    """Create a test API key for authenticated requests."""
+    key = key_manager.create_key("test_user", rate_limit=100)
+    yield key
+    # Cleanup after test
+    key_manager.delete_key(key)
+
+
+@pytest.fixture
+def auth_headers(api_key: str) -> Dict[str, str]:
+    """Headers with API key for authenticated requests."""
+    return {"X-API-Key": api_key}
 
 
 @pytest.fixture
@@ -46,7 +62,7 @@ class TestOpenAPISchema:
     Verify that OpenAPI schema is correctly generated and matches models.
     """
     
-    def test_openapi_schema_exists(self, client: TestClient) -> None:
+    def test_openapi_schema_exists(self, client: TestClient, auth_headers: Dict[str, str]) -> None:
         """
         API should expose OpenAPI schema at /openapi.json.
         
@@ -60,7 +76,7 @@ class TestOpenAPISchema:
         assert "info" in schema
         assert "paths" in schema
     
-    def test_openapi_schema_has_analyze_endpoint(self, client: TestClient) -> None:
+    def test_openapi_schema_has_analyze_endpoint(self, client: TestClient, auth_headers: Dict[str, str]) -> None:
         """
         Schema should document /analyze endpoint.
         
@@ -72,7 +88,7 @@ class TestOpenAPISchema:
         assert "/analyze" in schema["paths"]
         assert "post" in schema["paths"]["/analyze"]
     
-    def test_openapi_schema_has_health_endpoint(self, client: TestClient) -> None:
+    def test_openapi_schema_has_health_endpoint(self, client: TestClient, auth_headers: Dict[str, str]) -> None:
         """
         Schema should document /health endpoint.
         
@@ -84,7 +100,7 @@ class TestOpenAPISchema:
         assert "/health" in schema["paths"]
         assert "get" in schema["paths"]["/health"]
     
-    def test_openapi_schema_defines_risk_request_model(self, client: TestClient) -> None:
+    def test_openapi_schema_defines_risk_request_model(self, client: TestClient, auth_headers: Dict[str, str]) -> None:
         """
         Schema should define RiskRequest model.
         
@@ -114,77 +130,51 @@ class TestRequestValidation:
     Verify that API validates input and returns 422 for bad requests.
     """
     
-    def test_missing_required_field_returns_422(self, client: TestClient) -> None:
-        """
-        Request missing required field should return 422 Unprocessable Entity.
-        
-        SRP: Test required field validation.
-        """
-        # Missing filing_year
+    def test_missing_required_field_returns_422(self, client: TestClient, auth_headers: Dict[str, str]) -> None:
         response = client.post("/analyze", json={
             "ticker": "AAPL"
             # Missing filing_year
-        })
+        }, headers=auth_headers)
         
         assert response.status_code == 422
         error = response.json()
         assert "detail" in error
     
-    def test_invalid_ticker_format_returns_422(self, client: TestClient) -> None:
-        """
-        Invalid ticker format should return 422.
-        
-        SRP: Test ticker validation.
-        """
+    def test_invalid_ticker_format_returns_422(self, client: TestClient, auth_headers: Dict[str, str]) -> None:
         response = client.post("/analyze", json={
             "ticker": "invalid ticker",  # Lowercase with space
             "filing_year": 2025,
             "html_content": "<html>test</html>"
-        })
+        }, headers=auth_headers)
         
         assert response.status_code == 422
         error = response.json()
         assert "detail" in error
     
-    def test_invalid_year_returns_422(self, client: TestClient) -> None:
-        """
-        Year outside valid range should return 422.
-        
-        SRP: Test year validation.
-        """
+    def test_invalid_year_returns_422(self, client: TestClient, auth_headers: Dict[str, str]) -> None:
         response = client.post("/analyze", json={
             "ticker": "AAPL",
             "filing_year": 1800,  # Too old
             "html_content": "<html>test</html>"
-        })
+        }, headers=auth_headers)
         
         assert response.status_code == 422
     
-    def test_empty_ticker_returns_422(self, client: TestClient) -> None:
-        """
-        Empty ticker should return 422.
-        
-        SRP: Test empty string validation.
-        """
+    def test_empty_ticker_returns_422(self, client: TestClient, auth_headers: Dict[str, str]) -> None:
         response = client.post("/analyze", json={
             "ticker": "",
             "filing_year": 2025,
             "html_content": "<html>test</html>"
-        })
+        }, headers=auth_headers)
         
         assert response.status_code == 422
     
-    def test_missing_html_content_and_path_returns_422(self, client: TestClient) -> None:
-        """
-        Request without html_content OR html_path should return 422.
-        
-        SRP: Test mutually exclusive field validation.
-        """
+    def test_missing_html_content_and_path_returns_422(self, client: TestClient, auth_headers: Dict[str, str]) -> None:
         response = client.post("/analyze", json={
             "ticker": "AAPL",
             "filing_year": 2025
             # Missing both html_content and html_path
-        })
+        }, headers=auth_headers)
         
         assert response.status_code == 422
 
@@ -201,21 +191,16 @@ class TestResponseStructure:
     def test_successful_response_has_correct_structure(
         self,
         client: TestClient,
+        auth_headers: Dict[str, str],
         sample_html_path: Path
     ) -> None:
-        """
-        Successful analysis should return properly structured response.
-        
-        SRP: Test response schema.
-        """
-        # Read with CP1252 encoding (SEC filings use this)
         html_content = sample_html_path.read_text(encoding='cp1252')
         
         response = client.post("/analyze", json={
             "ticker": "AAPL",
             "filing_year": 2025,
             "html_content": html_content
-        })
+        }, headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -234,20 +219,16 @@ class TestResponseStructure:
     def test_risk_entry_has_required_fields(
         self,
         client: TestClient,
+        auth_headers: Dict[str, str],
         sample_html_path: Path
     ) -> None:
-        """
-        Each risk entry should have all required fields.
-        
-        SRP: Test risk schema.
-        """
         html_content = sample_html_path.read_text(encoding='cp1252')
         
         response = client.post("/analyze", json={
             "ticker": "AAPL",
             "filing_year": 2025,
             "html_content": html_content
-        })
+        }, headers=auth_headers)
         
         data = response.json()
         
@@ -273,20 +254,16 @@ class TestResponseStructure:
     def test_metadata_includes_pipeline_info(
         self,
         client: TestClient,
+        auth_headers: Dict[str, str],
         sample_html_path: Path
     ) -> None:
-        """
-        Metadata should include pipeline execution information.
-        
-        SRP: Test metadata schema.
-        """
         html_content = sample_html_path.read_text(encoding='cp1252')
         
         response = client.post("/analyze", json={
             "ticker": "AAPL",
             "filing_year": 2025,
             "html_content": html_content
-        })
+        }, headers=auth_headers)
         
         data = response.json()
         metadata = data["metadata"]
@@ -304,17 +281,12 @@ class TestErrorHandling:
     Verify that API handles errors gracefully with proper status codes.
     """
     
-    def test_invalid_html_handled_gracefully(self, client: TestClient) -> None:
-        """
-        Empty HTML should process with fallback (returns empty risks).
-        
-        SRP: Test HTML parsing robustness.
-        """
+    def test_invalid_html_handled_gracefully(self, client: TestClient, auth_headers: Dict[str, str]) -> None:
         response = client.post("/analyze", json={
             "ticker": "AAPL",
             "filing_year": 2025,
             "html_content": ""  # Empty HTML
-        })
+        }, headers=auth_headers)
         
         # Should succeed (BeautifulSoup/fallback handles it)
         assert response.status_code == 200
@@ -322,12 +294,7 @@ class TestErrorHandling:
         # May have 0 risks if no content
         assert "risks" in data
     
-    def test_missing_item_1a_handled_gracefully(self, client: TestClient) -> None:
-        """
-        HTML without Item 1A should return success with fallback.
-        
-        SRP: Test missing section handling.
-        """
+    def test_missing_item_1a_handled_gracefully(self, client: TestClient, auth_headers: Dict[str, str]) -> None:
         html_without_1a = """
         <html>
             <body>
@@ -340,24 +307,19 @@ class TestErrorHandling:
             "ticker": "TEST",
             "filing_year": 2025,
             "html_content": html_without_1a
-        })
+        }, headers=auth_headers)
         
         # Should succeed with fallback (returns full text)
         assert response.status_code == 200
         data = response.json()
         assert len(data["risks"]) > 0
     
-    def test_nonexistent_file_path_returns_404(self, client: TestClient) -> None:
-        """
-        Non-existent html_path should return 404 Not Found.
-        
-        SRP: Test file not found error.
-        """
+    def test_nonexistent_file_path_returns_404(self, client: TestClient, auth_headers: Dict[str, str]) -> None:
         response = client.post("/analyze", json={
             "ticker": "AAPL",
             "filing_year": 2025,
             "html_path": "/nonexistent/file.html"
-        })
+        }, headers=auth_headers)
         
         # Should be 404 (file not found check in API)
         assert response.status_code == 404
@@ -421,20 +383,16 @@ class TestTypeSafety:
     def test_response_is_json_serializable(
         self,
         client: TestClient,
+        auth_headers: Dict[str, str],
         sample_html_path: Path
     ) -> None:
-        """
-        Response should be valid JSON.
-        
-        SRP: Test JSON serialization.
-        """
         html_content = sample_html_path.read_text(encoding='cp1252')
         
         response = client.post("/analyze", json={
             "ticker": "AAPL",
             "filing_year": 2025,
             "html_content": html_content
-        })
+        }, headers=auth_headers)
         
         # Should be parseable JSON
         data = response.json()
@@ -444,18 +402,13 @@ class TestTypeSafety:
         assert isinstance(json_str, str)
         assert len(json_str) > 0
     
-    def test_request_with_extra_fields_accepted(self, client: TestClient) -> None:
-        """
-        Pydantic should allow extra fields (or reject them based on config).
-        
-        SRP: Test extra field handling.
-        """
+    def test_request_with_extra_fields_accepted(self, client: TestClient, auth_headers: Dict[str, str]) -> None:
         response = client.post("/analyze", json={
             "ticker": "AAPL",
             "filing_year": 2025,
             "html_content": "<html><body>ITEM 1A. Risk factors content</body></html>",
             "extra_field": "should be ignored or rejected"
-        })
+        }, headers=auth_headers)
         
         # Either succeeds (ignores extra) or fails with 422 (forbids extra)
         assert response.status_code in [200, 422]
@@ -473,13 +426,9 @@ class TestOptionalParameters:
     def test_retrieve_top_k_parameter(
         self,
         client: TestClient,
+        auth_headers: Dict[str, str],
         sample_html_path: Path
     ) -> None:
-        """
-        retrieve_top_k parameter should control number of results.
-        
-        SRP: Test optional parameter.
-        """
         html_content = sample_html_path.read_text(encoding='cp1252')
         
         response = client.post("/analyze", json={
@@ -487,7 +436,7 @@ class TestOptionalParameters:
             "filing_year": 2025,
             "html_content": html_content,
             "retrieve_top_k": 3
-        })
+        }, headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -498,20 +447,16 @@ class TestOptionalParameters:
     def test_default_retrieve_top_k(
         self,
         client: TestClient,
+        auth_headers: Dict[str, str],
         sample_html_path: Path
     ) -> None:
-        """
-        Without retrieve_top_k, should use default (10).
-        
-        SRP: Test default parameter value.
-        """
         html_content = sample_html_path.read_text(encoding='cp1252')
         
         response = client.post("/analyze", json={
             "ticker": "AAPL",
             "filing_year": 2025,
             "html_content": html_content
-        })
+        }, headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
