@@ -15,6 +15,17 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -32,7 +43,18 @@ jobs:
     - name: Install dependencies
       run: |
         uv sync
+    
+    - name: Install Redis CLI
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y redis-tools
+    
+    - name: Wait for Redis
+      run: |
+        timeout 30 bash -c 'until redis-cli -h localhost ping; do sleep 1; done'
         
     - name: Run tests
       run: |
         uv run pytest
+      env:
+        REDIS_URL: redis://localhost:6379/0
