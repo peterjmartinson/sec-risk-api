@@ -207,6 +207,60 @@ scores = scorer.calculate_severity_batch(chunks)
 - Novelty = 1 - max_similarity (higher = more novel)
 - Edge case: No historical data → novelty = 1.0 (maximally novel)
 
+### Integration Pipeline (End-to-End)
+
+Run the complete analysis pipeline from HTML filing to structured risk scores:
+
+```python
+from sec_risk_api.integration import IntegrationPipeline
+
+# Initialize integration pipeline
+pipeline = IntegrationPipeline(persist_path="./chroma_db")
+
+# Analyze a filing end-to-end
+result = pipeline.analyze_filing(
+    html_path="data/sample_10k.html",
+    ticker="AAPL",
+    filing_year=2025,
+    retrieve_top_k=10  # Analyze top 10 risk factors
+)
+
+# Access structured results
+print(f"Ticker: {result.ticker}")
+print(f"Filing Year: {result.filing_year}")
+print(f"Risks Analyzed: {len(result.risks)}")
+
+# Each risk includes scores with full provenance
+for risk in result.risks:
+    print(f"\nRisk: {risk['text'][:100]}...")
+    print(f"Severity: {risk['severity']['value']:.2f} - {risk['severity']['explanation']}")
+    print(f"Novelty: {risk['novelty']['value']:.2f} - {risk['novelty']['explanation']}")
+    print(f"Source: {risk['source_citation'][:80]}...")
+
+# Export to JSON
+json_output = result.to_json()
+with open("risk_analysis.json", "w") as f:
+    f.write(json_output)
+
+# Access metadata
+print(f"\nPipeline Metadata:")
+print(f"Total latency: {result.metadata['total_latency_ms']:.2f}ms")
+print(f"Chunks indexed: {result.metadata['chunks_indexed']}")
+```
+
+**Pipeline Flow**:
+1. **Validation** - Check file exists, ticker format, year range
+2. **Indexing** - Extract Item 1A → chunk → embed → store
+3. **Retrieval** - Semantic search for top-k risk factors
+4. **Scoring** - Compute severity and novelty for each
+5. **Output** - Structured JSON with complete provenance
+
+**Novelty Comparison**:
+- Searches historical filings (up to 3 years back)
+- First filing → novelty = 1.0 (no history)
+- Repeated content → novelty ≈ 0.0 (identical to prior year)
+- New risks → novelty > 0.7 (semantically distinct)
+
 ## Testing
 
 The project follows strict **Test-Driven Development (TDD)** and uses **mypy** for type safety.
