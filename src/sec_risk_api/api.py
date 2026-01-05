@@ -26,7 +26,7 @@ Usage:
          }'
 """
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
@@ -36,6 +36,9 @@ import logging
 import re
 
 from sec_risk_api.integration import IntegrationPipeline, IntegrationError, RiskAnalysisResult
+from sec_risk_api.auth import limiter, authenticate_api_key, rate_limit_key_func, API_KEY_HEADER
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -220,12 +223,37 @@ app = FastAPI(
     openapi_url="/openapi.json"
 )
 
+# Configure SlowAPI rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
 # Initialize integration pipeline (singleton)
 pipeline = IntegrationPipeline()
 
 # ============================================================================
-# Endpoints
+# Dependencies
 # ============================================================================
+
+async def get_api_key(api_key: Optional[str] = Depends(API_KEY_HEADER)) -> str:
+    """
+    Dependency to authenticate API key.
+    
+    Args:
+        api_key: API key from header (optional to allow custom 401 error).
+    
+    Returns:
+        Associated user.
+    
+    Raises:
+        HTTPException: If invalid or missing.
+    """
+    if not api_key:
+        logger.warning("API key required but not provided")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API key required"
+        )
+    return authenticate_api_key(api_key)
 
 @app.get("/", include_in_schema=False)
 async def root() -> RedirectResponse:
@@ -252,6 +280,7 @@ async def health_check() -> HealthResponse:
     return HealthResponse(status="healthy", version=API_VERSION)
 
 
+@limiter.limit("10/minute")
 @app.post(
     "/analyze",
     response_model=RiskResponse,
@@ -260,12 +289,14 @@ async def health_check() -> HealthResponse:
     responses={
         200: {"description": "Successful analysis"},
         400: {"description": "Bad request (invalid HTML)"},
+        401: {"description": "Unauthorized (invalid API key)"},
         404: {"description": "File not found"},
         422: {"description": "Validation error (invalid input)"},
+        429: {"description": "Rate limit exceeded"},
         500: {"description": "Internal server error"}
     }
 )
-async def analyze_filing(request: RiskRequest) -> RiskResponse:
+async def analyze_filing(request: RiskRequest, user: str = Depends(get_api_key)) -> RiskResponse:
     """
     Analyze a SEC filing and compute risk scores.
     
@@ -328,6 +359,7 @@ async def analyze_filing(request: RiskRequest) -> RiskResponse:
     """
     try:
         # Determine HTML source
+        temp_path: Optional[str] = None
         if request.html_content is not None:
             # Use provided HTML content - write to temp file
             with tempfile.NamedTemporaryFile(
@@ -367,7 +399,7 @@ async def analyze_filing(request: RiskRequest) -> RiskResponse:
         )
         
         # Clean up temp file if created
-        if request.html_content is not None:
+        if request.html_content is not None and temp_path is not None:
             try:
                 Path(temp_path).unlink()
             except Exception:
