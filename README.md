@@ -261,6 +261,161 @@ print(f"Chunks indexed: {result.metadata['chunks_indexed']}")
 - Repeated content → novelty ≈ 0.0 (identical to prior year)
 - New risks → novelty > 0.7 (semantically distinct)
 
+## REST API
+
+The system exposes a FastAPI REST interface for production deployments.
+
+### Starting the Server
+
+```bash
+# Development mode (auto-reload)
+uv run uvicorn sec_risk_api.api:app --reload
+
+# Production mode
+uv run uvicorn sec_risk_api.api:app --host 0.0.0.0 --port 8000
+```
+
+### API Endpoints
+
+#### POST /analyze
+
+Analyze an SEC filing and return risk scores.
+
+**Request Body**:
+```json
+{
+  "ticker": "AAPL",
+  "filing_year": 2025,
+  "html_content": "<html>...</html>",
+  "retrieve_top_k": 10
+}
+```
+
+Or use a file path:
+```json
+{
+  "ticker": "AAPL",
+  "filing_year": 2025,
+  "html_path": "/path/to/filing.html",
+  "retrieve_top_k": 10
+}
+```
+
+**Response**:
+```json
+{
+  "ticker": "AAPL",
+  "filing_year": 2025,
+  "risks": [
+    {
+      "text": "Supply chain disruptions could materially impact...",
+      "source_citation": "Supply chain disruptions...",
+      "severity": {
+        "value": 0.75,
+        "explanation": "High severity due to keywords: severe, disruption"
+      },
+      "novelty": {
+        "value": 0.82,
+        "explanation": "High novelty - semantically distinct from 2024 filing"
+      },
+      "metadata": {
+        "ticker": "AAPL",
+        "filing_year": 2025,
+        "item_type": "Item 1A"
+      }
+    }
+  ],
+  "metadata": {
+    "total_latency_ms": 2534.5,
+    "chunks_indexed": 5
+  }
+}
+```
+
+**Example - cURL**:
+```bash
+# With HTML content
+curl -X POST "http://localhost:8000/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ticker": "AAPL",
+    "filing_year": 2025,
+    "html_content": "<html>...</html>",
+    "retrieve_top_k": 5
+  }'
+
+# With file path
+curl -X POST "http://localhost:8000/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ticker": "AAPL",
+    "filing_year": 2025,
+    "html_path": "data/sample_10k.html",
+    "retrieve_top_k": 5
+  }'
+```
+
+**Example - Python**:
+```python
+import requests
+
+# With HTML content
+with open("data/sample_10k.html", encoding="cp1252") as f:
+    html_content = f.read()
+
+response = requests.post("http://localhost:8000/analyze", json={
+    "ticker": "AAPL",
+    "filing_year": 2025,
+    "html_content": html_content,
+    "retrieve_top_k": 10
+})
+
+data = response.json()
+for risk in data["risks"]:
+    print(f"Severity: {risk['severity']['value']:.2f}")
+    print(f"Novelty: {risk['novelty']['value']:.2f}")
+    print(f"Text: {risk['text'][:100]}...\n")
+
+# With file path (server must have access to file)
+response = requests.post("http://localhost:8000/analyze", json={
+    "ticker": "AAPL",
+    "filing_year": 2025,
+    "html_path": "/path/to/filing.html"
+})
+```
+
+#### GET /health
+
+Health check endpoint.
+
+**Response**:
+```json
+{
+  "status": "healthy",
+  "version": "0.1.0",
+  "vector_db_initialized": true
+}
+```
+
+#### GET /openapi.json
+
+Auto-generated OpenAPI schema for API documentation.
+
+**Interactive Documentation**:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+### Validation Rules
+
+The API enforces strict validation via Pydantic:
+
+- **ticker**: 1-10 uppercase alphanumeric characters
+- **filing_year**: 1994-2050 (SEC EDGAR era)
+- **html_content** XOR **html_path**: Exactly one must be provided
+- **retrieve_top_k**: 1-100 (default: 10)
+
+Invalid requests return **422 Unprocessable Entity** with detailed error messages.
+
 ## Testing
 
 The project follows strict **Test-Driven Development (TDD)** and uses **mypy** for type safety.

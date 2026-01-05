@@ -1,3 +1,107 @@
+## [2026-01-04] Issue #24: FastAPI REST API Wrapper (COMPLETED)
+
+### Status: COMPLETED ✓
+
+### Summary
+Implemented production-ready REST API using FastAPI with full Pydantic validation, comprehensive error handling, and automatic OpenAPI documentation. The API exposes the risk analysis pipeline via HTTP endpoints, enabling integration with financial systems.
+
+### Technical Implementation
+
+**Core Components**:
+- `RiskRequest` model: Pydantic validation for API inputs (ticker format, year range, HTML content XOR path)
+- `RiskResponse` model: Structured API output with nested Pydantic models
+- `ScoreInfo` model: Score value + human-readable explanation
+- `RiskEntry` model: Individual risk factor with severity/novelty scores
+- `HealthResponse` model: System health check
+
+**API Endpoints**:
+1. **POST /analyze**: End-to-end risk analysis
+   - Input: ticker, filing_year, html_content (or html_path), retrieve_top_k (optional, default=10)
+   - Output: RiskResponse with scored risks + metadata
+   - Validation: Ticker format (1-10 uppercase alphanumeric), year range (1994-2050)
+   - Error codes: 400 (bad request), 404 (file not found), 422 (validation), 500 (internal)
+
+2. **GET /health**: Health check
+   - Returns: status, version, vector_db_initialized flag
+   - Used for deployment readiness checks
+
+3. **GET /openapi.json**: Auto-generated schema
+   - Interactive docs at /docs (Swagger UI) and /redoc
+
+**Key Features**:
+- Strict Pydantic validation (enforced by `model_post_init`)
+- Temporary file handling for html_content submissions (auto-cleanup)
+- Encoding support (CP1252 for SEC filings)
+- HTTPException hierarchy (404 re-raised before catch-all)
+- Lazy pipeline initialization (on first request via `@app.on_event("startup")`)
+- Complete type safety (passes `mypy --strict`)
+
+### Test Coverage: 22 API Tests
+
+**Test Class 1: OpenAPI Schema** (4 tests)
+- ✅ Schema exists at /openapi.json
+- ✅ Schema defines /analyze endpoint
+- ✅ Schema defines /health endpoint
+- ✅ Schema includes RiskRequest model
+
+**Test Class 2: Request Validation** (5 tests)
+- ✅ Missing required field returns 422
+- ✅ Invalid ticker format returns 422
+- ✅ Invalid year returns 422
+- ✅ Empty ticker returns 422
+- ✅ Missing both html_content and html_path returns 422
+
+**Test Class 3: Response Structure** (3 tests)
+- ✅ Successful response has correct structure
+- ✅ Risk entries have all required fields
+- ✅ Metadata includes pipeline info
+
+**Test Class 4: Error Handling** (3 tests)
+- ✅ Empty HTML handled gracefully (fallback)
+- ✅ Missing Item 1A handled gracefully
+- ✅ Nonexistent file path returns 404
+
+**Test Class 5: Health Check** (3 tests)
+- ✅ Health endpoint returns 200
+- ✅ Health response includes status
+- ✅ Health response includes version
+
+**Test Class 6: Type Safety** (2 tests)
+- ✅ Response is JSON serializable
+- ✅ Extra fields in request accepted (forward compatibility)
+
+**Test Class 7: Optional Parameters** (2 tests)
+- ✅ retrieve_top_k parameter controls results
+- ✅ Default retrieve_top_k = 10
+
+### Performance
+- API overhead: ~50-100ms (Pydantic validation + serialization)
+- End-to-end latency: 2.5-3.5s (dominated by pipeline, not API layer)
+- Health check: <10ms (no pipeline interaction)
+
+### Bug Fixes
+1. **Encoding Issue**: Tests failing due to CP1252 encoding in sample_10k.html
+   - Fixed: Added `encoding='cp1252'` to all `read_text()` calls in tests
+   
+2. **HTTPException Handling**: 404 errors caught by generic `except Exception`, returned as 500
+   - Fixed: Added `except HTTPException: raise` before catch-all to preserve error codes
+
+3. **mypy Type Error**: `html_path_to_use` could be `str | None`
+   - Fixed: Added explicit None check with HTTPException(400) before file operations
+
+### Artifacts
+- `src/sec_risk_api/api.py`: 447 lines, 3 endpoints, 5 Pydantic models
+- `tests/test_api.py`: 520 lines, 22 tests across 7 test classes
+- README.md: Updated with API usage examples (cURL, Python requests)
+
+### Validation
+- ✅ All 120 tests passing (98 existing + 22 API)
+- ✅ mypy --strict passes on api.py
+- ✅ API accessible at http://localhost:8000
+- ✅ Interactive docs at http://localhost:8000/docs
+
+---
+
 ## [2026-01-04] Issue #22: Integration Testing - Walking Skeleton (COMPLETED)
 
 ### Status: COMPLETED ✓
