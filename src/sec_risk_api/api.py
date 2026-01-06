@@ -40,6 +40,11 @@ from sec_risk_api.auth import limiter, authenticate_api_key, rate_limit_key_func
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from sec_risk_api.tasks import celery_app, analyze_filing_task, index_filing_task
+from sec_risk_api.monitoring import (
+    check_redis_connection,
+    check_chroma_connection,
+    _shutdown_handler
+)
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -311,6 +316,68 @@ async def health_check() -> HealthResponse:
         HealthResponse with status and version
     """
     return HealthResponse(status="healthy", version=API_VERSION)
+
+
+@app.get(
+    "/ready",
+    response_model=Dict[str, Any],
+    tags=["Health"],
+    summary="Readiness probe"
+)
+async def readiness_check() -> Dict[str, Any]:
+    """
+    Check if service is ready to accept traffic.
+    
+    Verifies all dependencies (Redis, ChromaDB) are accessible.
+    Used by Kubernetes/load balancers to determine if pod is ready.
+    
+    Returns:
+        Status dictionary with overall status and dependency checks
+    
+    Raises:
+        HTTPException: 503 if service is not ready
+    """
+    redis_ok = check_redis_connection()
+    chroma_ok = check_chroma_connection()
+    shutting_down = _shutdown_handler.is_shutting_down()
+    
+    all_ready = redis_ok and chroma_ok and not shutting_down
+    
+    result = {
+        "status": "ready" if all_ready else "not_ready",
+        "dependencies": {
+            "redis": "ok" if redis_ok else "unavailable",
+            "chromadb": "ok" if chroma_ok else "unavailable"
+        },
+        "shutting_down": shutting_down
+    }
+    
+    if not all_ready:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=result
+        )
+    
+    return result
+
+
+@app.get(
+    "/live",
+    response_model=Dict[str, str],
+    tags=["Health"],
+    summary="Liveness probe"
+)
+async def liveness_check() -> Dict[str, str]:
+    """
+    Check if service is alive (not deadlocked).
+    
+    This is a simple check that the process is responsive.
+    Used by Kubernetes to restart pods that are stuck/deadlocked.
+    
+    Returns:
+        Status dictionary indicating service is alive
+    """
+    return {"status": "alive"}
 
 
 @limiter.limit("10/minute")

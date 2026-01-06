@@ -198,5 +198,77 @@
   "EhB0OgM6aVc_XGsEYoNuP9iuJ6BEiPzfpDeIap9bVVs": {
     "user": "user",
     "rate_limit": 20
+  },
+  "t1PLb7FiFHGGFCJsBHyhlgdCYefvz2CowwW62LvBhEA": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "BnZRSbLQuhhvFryGtExiec2H1JP6poH8f9v1fkjJgp0": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "GpAUE9RP_7MVNtt4Z5DENc0PG6fb2SsV3PoGWcTDft0": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "dnd296TyEDLpM_xWkq5abU5FQNM31KWjA2hXvfA_t1k": {
+    "user": "basic_user",
+    "rate_limit": 5
+  },
+  "l9dMa2lQTiLjHDkkZSE8zJLTSL0qAp_9kMiEzTbAus8": {
+    "user": "premium_user",
+    "rate_limit": 50
+  },
+  "pOHnQjTPjTa0zLh24uhfcLX4Ij7RZHSvmr29gACQyfs": {
+    "user": "user",
+    "rate_limit": 20
+  },
+  "qfqkemA0f7nAHwJ6fFkV_gPmlCnFZF5IltilCSeTM3E": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "nDQmzfvpF5Px-uB0EEbz7jP2VIGvosX6MsKsGwr_puQ": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "htMz_chacXMYEpRsyTEWP2MCeJnBWersbTjL5BV8rXM": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "gqC4lT87RldYEg2ZYUzIN5ae-N7AtExpiVNlSyqkyc8": {
+    "user": "basic_user",
+    "rate_limit": 5
+  },
+  "Z2iF5cKvmFi9nO1SEuF9ac2Vta9zFJ521KjC1Uwc6lU": {
+    "user": "premium_user",
+    "rate_limit": 50
+  },
+  "JzjNygvdwPniwfw_HPfEiVYxha3966XH2wygex6-ubw": {
+    "user": "user",
+    "rate_limit": 20
+  },
+  "UbCJAj2fqALfi3PGuwS2u4wNo-BjIyK7Q0UpLFsFp88": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "ezwLxKMQXrGangvTh4DexWjCAmTtBpCOer55q9xwz6k": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "fI41DXCuw5AklBUs4qa0md972sqzo0pyfnCYALPV1eQ": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "YMG72fSGOLNtIwWfeMWpHb8rkaLlM4e2H0kMmDWrJ8Y": {
+    "user": "basic_user",
+    "rate_limit": 5
+  },
+  "bYqaPimFJLznfNsuVPnafwRcSGZfNi5LlQTLvQDrLjQ": {
+    "user": "premium_user",
+    "rate_limit": 50
+  },
+  "uNiW_Csy0GfT6VruKMpdLycbQ6pIovbrRlIEy6hoblw": {
+    "user": "user",
+    "rate_limit": 20
   }
 }

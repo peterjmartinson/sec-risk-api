@@ -541,6 +541,238 @@ The API enforces strict validation via Pydantic:
 
 Invalid requests return **422 Unprocessable Entity** with detailed error messages.
 
+## Deployment
+
+### Docker Deployment
+
+The application includes full Docker support with multi-stage builds and health checks.
+
+**Build and Run with Docker Compose**:
+```bash
+# Build all services
+docker-compose build
+
+# Start all services (API, Worker, Redis)
+docker-compose up -d
+
+# Check status
+docker-compose ps
+
+# View logs
+docker-compose logs -f api
+docker-compose logs -f worker
+
+# Stop all services
+docker-compose down
+```
+
+**Services**:
+- **API**: FastAPI server on port 8000
+- **Worker**: Celery worker for background tasks
+- **Redis**: Message broker and result backend
+
+**Environment Variables**:
+```bash
+# Set in docker-compose.yml or .env file
+REDIS_URL=redis://redis:6379/0
+LOG_LEVEL=INFO
+ENVIRONMENT=production
+CHROMA_PERSIST_PATH=/app/chroma_db
+```
+
+**Health Checks**:
+- API: `http://localhost:8000/health` (basic health)
+- API: `http://localhost:8000/ready` (readiness with dependency checks)
+- API: `http://localhost:8000/live` (liveness probe)
+
+### Cloud Deployment (Digital Ocean)
+
+**Prerequisites**:
+- Digital Ocean account
+- Docker installed on Droplet
+- Domain name (optional, for HTTPS)
+
+**Setup Steps**:
+
+1. **Create Droplet**:
+```bash
+# Recommended: Ubuntu 22.04 LTS, 4GB RAM minimum
+doctl compute droplet create sec-risk-api \
+  --image ubuntu-22-04-x64 \
+  --size s-2vcpu-4gb \
+  --region nyc3 \
+  --ssh-keys your-ssh-key-id
+```
+
+2. **SSH into Droplet**:
+```bash
+ssh root@your-droplet-ip
+```
+
+3. **Install Docker**:
+```bash
+# Update packages
+apt-get update && apt-get upgrade -y
+
+# Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sh get-docker.sh
+
+# Install Docker Compose
+apt-get install docker-compose-plugin -y
+```
+
+4. **Clone Repository**:
+```bash
+git clone https://github.com/your-username/sec-risk-api.git
+cd sec-risk-api
+```
+
+5. **Configure Environment**:
+```bash
+# Create .env file
+cat > .env <<EOF
+REDIS_URL=redis://redis:6379/0
+LOG_LEVEL=INFO
+ENVIRONMENT=production
+CHROMA_PERSIST_PATH=/app/chroma_db
+EOF
+```
+
+6. **Deploy Application**:
+```bash
+# Build and start services
+docker-compose up -d
+
+# Verify deployment
+curl http://localhost:8000/health
+```
+
+7. **Setup Firewall** (recommended):
+```bash
+ufw allow 22/tcp  # SSH
+ufw allow 8000/tcp  # API
+ufw enable
+```
+
+8. **Setup HTTPS with Nginx** (recommended for production):
+```bash
+# Install Nginx and Certbot
+apt-get install nginx certbot python3-certbot-nginx -y
+
+# Configure Nginx as reverse proxy
+cat > /etc/nginx/sites-available/sec-risk-api <<'EOF'
+server {
+    listen 80;
+    server_name your-domain.com;
+    
+    location / {
+        proxy_pass http://localhost:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+EOF
+
+ln -s /etc/nginx/sites-available/sec-risk-api /etc/nginx/sites-enabled/
+systemctl reload nginx
+
+# Get SSL certificate
+certbot --nginx -d your-domain.com
+```
+
+### Monitoring & Observability
+
+The application includes comprehensive monitoring:
+
+**Structured Logging**:
+- All logs are JSON-formatted for aggregation
+- Includes: timestamps, log levels, request IDs, latency metrics
+- LLM usage tracking: token counts, costs, model versions
+
+**Metrics Collection**:
+- Request counters by endpoint
+- Latency histograms (p50, p95, p99)
+- Error rates and categorization
+- Celery task metrics
+
+**Health Checks**:
+- `/health`: Basic health check
+- `/ready`: Readiness probe (checks Redis, ChromaDB)
+- `/live`: Liveness probe (detects deadlocks)
+
+**Graceful Shutdown**:
+- Responds to SIGTERM signal
+- Waits for in-flight requests to complete (30s timeout)
+- Prevents new requests during shutdown
+
+**View Logs**:
+```bash
+# Follow API logs
+docker-compose logs -f api
+
+# Follow worker logs
+docker-compose logs -f worker
+
+# View structured JSON logs
+docker-compose logs api | jq .
+```
+
+### Performance Tuning
+
+**Celery Workers**:
+```bash
+# Adjust concurrency (default: 2)
+celery -A sec_risk_api.tasks worker --concurrency=4
+```
+
+**API Server**:
+```bash
+# Run multiple workers with Gunicorn
+gunicorn sec_risk_api.api:app \
+  --workers 4 \
+  --worker-class uvicorn.workers.UvicornWorker \
+  --bind 0.0.0.0:8000
+```
+
+**Redis Memory**:
+```yaml
+# In docker-compose.yml
+redis:
+  command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+```
+
+### Maintenance
+
+**Backup ChromaDB**:
+```bash
+# Create backup
+tar -czf chroma_backup_$(date +%Y%m%d).tar.gz ./chroma_db/
+
+# Restore backup
+tar -xzf chroma_backup_20250106.tar.gz
+```
+
+**Update Application**:
+```bash
+# Pull latest code
+git pull origin main
+
+# Rebuild and restart
+docker-compose down
+docker-compose build
+docker-compose up -d
+```
+
+**Monitor Resource Usage**:
+```bash
+# Docker stats
+docker stats
+
+# Disk usage
+docker system df
+```
+
 ## Testing
 
 The project follows strict **Test-Driven Development (TDD)** and uses **mypy** for type safety.
