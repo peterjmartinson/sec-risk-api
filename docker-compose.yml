@@ -1,0 +1,74 @@
+# Docker Compose configuration for SEC Risk API (Issue #4.3)
+# Provides local development environment with Redis, Celery worker, and API
+
+version: '3.8'
+
+services:
+  # Redis - Message broker and result backend
+  redis:
+    image: redis:7-alpine
+    container_name: sec-risk-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # API - FastAPI REST service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sec-risk-api
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=development
+      - CHROMA_PERSIST_PATH=/app/chroma_db
+    volumes:
+      - ./chroma_db:/app/chroma_db
+      - ./logs:/app/logs
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    command: uvicorn sec_risk_api.api:app --host 0.0.0.0 --port 8000
+
+  # Celery Worker - Background task processing
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sec-risk-worker
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=development
+      - CHROMA_PERSIST_PATH=/app/chroma_db
+    volumes:
+      - ./chroma_db:/app/chroma_db
+      - ./logs:/app/logs
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    command: celery -A sec_risk_api.tasks worker --loglevel=info --concurrency=2
+
+volumes:
+  redis_data:
+    driver: local
