@@ -27,7 +27,7 @@ Usage:
 """
 
 from fastapi import FastAPI, HTTPException, status, Depends, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any, Union
 import tempfile
@@ -317,12 +317,11 @@ async def health_check() -> HealthResponse:
 @app.post(
     "/analyze",
     response_model=Union[TaskSubmittedResponse, RiskResponse],
-    status_code=status.HTTP_202_ACCEPTED,
     tags=["Risk Analysis"],
-    summary="Analyze SEC filing (async)",
+    summary="Analyze SEC filing",
     responses={
-        202: {"description": "Task submitted successfully"},
-        200: {"description": "Synchronous analysis complete (deprecated)"},
+        202: {"description": "Task submitted successfully (async mode)"},
+        200: {"description": "Synchronous analysis complete"},
         400: {"description": "Bad request (invalid HTML)"},
         401: {"description": "Unauthorized (invalid API key)"},
         404: {"description": "File not found"},
@@ -335,34 +334,36 @@ async def analyze_filing(
     request: RiskRequest,
     req: Request,
     user: str = Depends(get_api_key),
-    async_mode: bool = True
+    async_mode: bool = False
 ) -> Union[TaskSubmittedResponse, RiskResponse]:
     """
-    Analyze a SEC filing and compute risk scores (async by default).
+    Analyze a SEC filing and compute risk scores.
     
-    **NEW**: This endpoint now returns immediately with a task_id (HTTP 202).
-    Use GET /tasks/{task_id} to check status and retrieve results.
+    **Modes**:
+    - Synchronous (default): Returns complete analysis immediately (HTTP 200)
+    - Asynchronous: Returns task_id for polling (HTTP 202) when async_mode=True
     
-    Pipeline:
+    Synchronous Pipeline:
+    1. Validate inputs (ticker, year, HTML source)
+    2. Extract and chunk Item 1A risk factors
+    3. Generate embeddings and index into vector database
+    4. Retrieve top-k risk factors via semantic search
+    5. Compute severity and novelty scores
+    6. Return structured results with citations
+    
+    Asynchronous Pipeline (async_mode=True):
     1. Validate inputs (ticker, year, HTML source)
     2. Submit task to Celery queue
-    3. Return task_id for status polling
-    
-    Background Task Pipeline:
-    1. Extract and chunk Item 1A risk factors
-    2. Generate embeddings and index into vector database
-    3. Retrieve top-k risk factors via semantic search
-    4. Compute severity and novelty scores
-    5. Store structured results with citations
+    3. Return task_id for status polling (use GET /tasks/{task_id})
     
     Args:
         request: RiskRequest with ticker, year, and HTML source
-        async_mode: If True (default), submit task and return immediately.
-                    If False, execute synchronously (deprecated).
+        async_mode: If True, submit to queue and return task_id immediately.
+                    If False (default), process synchronously and return results.
     
     Returns:
         TaskSubmittedResponse with task_id and status_url (async mode)
-        OR RiskResponse with results (sync mode, deprecated)
+        OR RiskResponse with results (sync mode, default)
     
     Raises:
         HTTPException 400: Invalid HTML content
@@ -388,6 +389,16 @@ async def analyze_filing(
           "message": "Analysis task submitted successfully"
         }
         ```
+    
+    Example Response (Sync):
+        ```json
+        {
+          "ticker": "AAPL",
+          "filing_year": 2025,
+          "risks": [...],
+          "metadata": {"total_latency_ms": 2534.5, "chunks_indexed": 5}
+        }
+        ```
     """
     if async_mode:
         # ASYNC MODE: Submit to Celery queue and return immediately
@@ -410,10 +421,13 @@ async def analyze_filing(
             
             logger.info(f"Task submitted: {task_id} for {request.ticker} {request.filing_year}")
             
-            return TaskSubmittedResponse(
-                task_id=task_id,
-                status_url=status_url,
-                message="Analysis task submitted successfully"
+            return JSONResponse(
+                status_code=status.HTTP_202_ACCEPTED,
+                content={
+                    "task_id": task_id,
+                    "status_url": status_url,
+                    "message": "Analysis task submitted successfully"
+                }
             )
         
         except ConnectionError as e:
@@ -431,9 +445,7 @@ async def analyze_filing(
             )
     
     else:
-        # SYNC MODE (DEPRECATED): Execute synchronously
-        logger.warning("Synchronous mode is deprecated. Use async mode for better performance.")
-        
+        # SYNC MODE (DEFAULT): Execute synchronously
         try:
             # Determine HTML source
             temp_path: Optional[str] = None

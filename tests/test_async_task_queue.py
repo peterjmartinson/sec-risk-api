@@ -57,7 +57,7 @@ class TestAPIImmediateResponse:
             
             start_time = time.time()
             response = client.post(
-                "/analyze",
+                "/analyze?async_mode=true",
                 json={
                     "ticker": "AAPL",
                     "filing_year": 2025,
@@ -337,7 +337,7 @@ class TestQueueFailureRecovery:
             
             client = TestClient(app)
             response = client.post(
-                "/analyze",
+                "/analyze?async_mode=true",
                 json={
                     "ticker": "AAPL",
                     "filing_year": 2025,
@@ -381,7 +381,7 @@ class TestEndToEndIntegration:
             mock_task.return_value = mock_result
             
             response = client.post(
-                "/analyze",
+                "/analyze?async_mode=true",
                 json={
                     "ticker": "TSLA",
                     "filing_year": 2024,
@@ -445,7 +445,7 @@ class TestEndToEndIntegration:
                 mock_task.return_value = mock_result
                 
                 response = client.post(
-                    "/analyze",
+                    "/analyze?async_mode=true",
                     json={
                         "ticker": f"TICK{i}",
                         "filing_year": 2024,
