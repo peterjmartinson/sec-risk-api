@@ -18,4 +18,4 @@ This directory contains versioned system prompts for LLM-based risk classificati
 
 ## Usage
 
-Prompts are loaded by `src/sec_risk_api/prompt_manager.py` and applied via the classification pipeline.
+Prompts are loaded by `src/sigmak/prompt_manager.py` and applied via the classification pipeline.

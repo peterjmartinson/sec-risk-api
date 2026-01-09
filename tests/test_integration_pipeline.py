@@ -23,7 +23,7 @@ from pathlib import Path
 import tempfile
 import shutil
 
-from sec_risk_api.integration import (
+from sigmak.integration import (
     IntegrationPipeline,
     RiskAnalysisResult,
     IntegrationError

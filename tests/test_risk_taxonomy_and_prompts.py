@@ -3,7 +3,7 @@
 
 import pytest
 from pathlib import Path
-from sec_risk_api.risk_taxonomy import (
+from sigmak.risk_taxonomy import (
     RiskCategory,
     get_all_categories,
     get_category_description,
@@ -11,7 +11,7 @@ from sec_risk_api.risk_taxonomy import (
     validate_category,
     CATEGORY_METADATA
 )
-from sec_risk_api.prompt_manager import PromptManager
+from sigmak.prompt_manager import PromptManager
 
 
 class TestRiskTaxonomy:

@@ -1,5 +1,5 @@
 """
-Authentication and rate limiting for SEC Risk API (Issue #25).
+Authentication and rate limiting for SigmaK API (Issue #25).
 
 Provides API key management and configurable rate limiting to protect compute costs.
 """

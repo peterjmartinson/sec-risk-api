@@ -4,18 +4,18 @@
 
 ### Implementation Overview
 
-Successfully implemented a production-ready asynchronous task queue system using **Celery + Redis** for the SEC Risk API. The system ensures API endpoints respond instantly (< 100ms) while processing long-running analysis tasks in parallel background workers.
+Successfully implemented a production-ready asynchronous task queue system using **Celery + Redis** for the SigmaK API. The system ensures API endpoints respond instantly (< 100ms) while processing long-running analysis tasks in parallel background workers.
 
 ### Key Components Created
 
-1. **`src/sec_risk_api/tasks.py`** (NEW)
+1. **`src/sigmak/tasks.py`** (NEW)
    - Celery application configuration
    - 3 background tasks: `analyze_filing_task`, `index_filing_task`, `batch_analyze_task`
    - Custom `CallbackTask` base class with progress tracking
    - Crash recovery (acks_late=True)
    - Exponential backoff retry logic
 
-2. **Updated `src/sec_risk_api/api.py`**
+2. **Updated `src/sigmak/api.py`**
    - POST /analyze → Returns task_id immediately (HTTP 202)
    - POST /index → Background indexing
    - GET /tasks/{task_id} → Task status polling
@@ -97,10 +97,10 @@ Test Class 4: EndToEndIntegration (3/3 passed)
 redis-server
 
 # 2. Start Celery worker
-celery -A sec_risk_api.tasks worker --loglevel=info
+celery -A sigmak.tasks worker --loglevel=info
 
 # 3. Start API server
-uvicorn sec_risk_api.api:app --reload
+uvicorn sigmak.api:app --reload
 
 # 4. Submit analysis (returns immediately)
 curl -X POST "http://localhost:8000/analyze" \
@@ -149,11 +149,11 @@ curl -X GET "http://localhost:8000/tasks/abc-123" \
 ### Files Created/Modified
 
 **NEW FILES:**
-- `src/sec_risk_api/tasks.py` (327 lines)
+- `src/sigmak/tasks.py` (327 lines)
 - `tests/test_async_task_queue.py` (495 lines)
 
 **MODIFIED FILES:**
-- `src/sec_risk_api/api.py` (+200 lines)
+- `src/sigmak/api.py` (+200 lines)
 - `pyproject.toml` (+2 dependencies)
 - `JOURNAL.md` (+150 lines)
 - `README.md` (+200 lines)

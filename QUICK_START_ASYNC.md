@@ -28,8 +28,8 @@ redis-server
 ### Terminal 2: Start Celery Worker
 
 ```bash
-cd /home/peter/Code/sec-risk-api
-celery -A sec_risk_api.tasks worker --loglevel=info
+cd /home/peter/Code/sigmak
+celery -A sigmak.tasks worker --loglevel=info
 ```
 
 Expected output:
@@ -37,16 +37,16 @@ Expected output:
  -------------- celery@hostname v5.6.2 (...)
 --- ***** ----- 
 -- ******* ---- [tasks]
-  . sec_risk_api.analyze_filing
-  . sec_risk_api.index_filing
-  . sec_risk_api.batch_analyze
+  . sigmak.analyze_filing
+  . sigmak.index_filing
+  . sigmak.batch_analyze
 ```
 
 ### Terminal 3: Start API Server
 
 ```bash
-cd /home/peter/Code/sec-risk-api
-uv run uvicorn sec_risk_api.api:app --reload --host 0.0.0.0 --port 8000
+cd /home/peter/Code/sigmak
+uv run uvicorn sigmak.api:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Expected output:
@@ -60,7 +60,7 @@ INFO:     Application startup complete.
 ### 1. Create an API Key
 
 ```python
-from sec_risk_api.auth import APIKeyManager
+from sigmak.auth import APIKeyManager
 
 manager = APIKeyManager()
 api_key = manager.create_api_key(user="test_user", rate_limit="10/minute")
@@ -219,8 +219,8 @@ while True:
 ### Check Celery Workers
 
 ```bash
-celery -A sec_risk_api.tasks inspect active
-celery -A sec_risk_api.tasks inspect stats
+celery -A sigmak.tasks inspect active
+celery -A sigmak.tasks inspect stats
 ```
 
 ### Check Redis Queue
@@ -250,20 +250,20 @@ Open in browser:
 
 **Problem: Worker crashes**
 - Tasks are automatically recovered due to acks_late=True
-- Restart worker: `celery -A sec_risk_api.tasks worker --loglevel=info`
+- Restart worker: `celery -A sigmak.tasks worker --loglevel=info`
 
 ## Performance Tips
 
 **Multiple Workers:**
 ```bash
 # Run 4 parallel workers
-celery -A sec_risk_api.tasks worker --concurrency=4 --loglevel=info
+celery -A sigmak.tasks worker --concurrency=4 --loglevel=info
 ```
 
 **Monitor with Flower:**
 ```bash
 pip install flower
-celery -A sec_risk_api.tasks flower
+celery -A sigmak.tasks flower
 # Open http://localhost:5555
 ```
 
@@ -283,15 +283,15 @@ celery_app.conf.update(
 
 # /etc/systemd/system/celery-sec-risk.service
 [Unit]
-Description=Celery Worker for SEC Risk API
+Description=Celery Worker for SigmaK API
 After=network.target redis.service
 
 [Service]
 Type=forking
 User=www-data
 Group=www-data
-WorkingDirectory=/opt/sec-risk-api
-ExecStart=/opt/sec-risk-api/.venv/bin/celery -A sec_risk_api.tasks worker \
+WorkingDirectory=/opt/sigmak
+ExecStart=/opt/sigmak/.venv/bin/celery -A sigmak.tasks worker \
           --concurrency=8 --loglevel=info --pidfile=/var/run/celery.pid
 
 [Install]

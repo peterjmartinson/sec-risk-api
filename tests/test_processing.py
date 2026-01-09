@@ -2,7 +2,7 @@
 # This software is proprietary and not licensed for use, modification, or distribution.
 
 import pytest
-from sec_risk_api.processing import chunk_risk_section
+from sigmak.processing import chunk_risk_section
 
 def test_chunk_risk_section_structure() -> None:
     """

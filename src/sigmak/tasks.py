@@ -1,7 +1,7 @@
 """
 Celery tasks for asynchronous background processing (Issue #4.3).
 
-This module defines all background tasks for the SEC Risk API:
+This module defines all background tasks for the SigmaK API:
 - Filing ingestion and indexing
 - Risk analysis and scoring
 - Batch processing
@@ -14,10 +14,10 @@ Configuration:
 
 Usage:
     # Start Celery worker
-    celery -A sec_risk_api.tasks worker --loglevel=info
+    celery -A sigmak.tasks worker --loglevel=info
     
     # Submit task from code
-    from sec_risk_api.tasks import analyze_filing_task
+    from sigmak.tasks import analyze_filing_task
     result = analyze_filing_task.delay(
         ticker="AAPL",
         filing_year=2025,
@@ -37,8 +37,8 @@ import os
 import tempfile
 from pathlib import Path
 
-from sec_risk_api.integration import IntegrationPipeline, IntegrationError
-from sec_risk_api.indexing_pipeline import IndexingPipeline
+from sigmak.integration import IntegrationPipeline, IntegrationError
+from sigmak.indexing_pipeline import IndexingPipeline
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -53,7 +53,7 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 # Initialize Celery app
 celery_app = Celery(
-    "sec_risk_api",
+    "sigmak",
     broker=REDIS_URL,
     backend=REDIS_URL
 )
@@ -114,7 +114,7 @@ class CallbackTask(Task):
 @celery_app.task(
     bind=True,
     base=CallbackTask,
-    name="sec_risk_api.analyze_filing",
+    name="sigmak.analyze_filing",
     max_retries=3,
     default_retry_delay=60,  # Retry after 60 seconds
     acks_late=True
@@ -226,7 +226,7 @@ def analyze_filing_task(
 @celery_app.task(
     bind=True,
     base=CallbackTask,
-    name="sec_risk_api.index_filing",
+    name="sigmak.index_filing",
     max_retries=3,
     default_retry_delay=60,
     acks_late=True
@@ -328,7 +328,7 @@ def index_filing_task(
 @celery_app.task(
     bind=True,
     base=CallbackTask,
-    name="sec_risk_api.batch_analyze",
+    name="sigmak.batch_analyze",
     max_retries=3,
     default_retry_delay=60,
     acks_late=True

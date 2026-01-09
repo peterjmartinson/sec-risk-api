@@ -17,7 +17,7 @@ from typing import Dict, Any, List, Optional
 import numpy as np
 from numpy.typing import NDArray
 
-from sec_risk_api.scoring import (
+from sigmak.scoring import (
     RiskScore,
     RiskScorer,
     ScoringError

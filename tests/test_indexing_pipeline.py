@@ -4,8 +4,8 @@
 import pytest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from sec_risk_api.indexing_pipeline import IndexingPipeline
-from sec_risk_api.init_vector_db import initialize_chroma
+from sigmak.indexing_pipeline import IndexingPipeline
+from sigmak.init_vector_db import initialize_chroma
 from chromadb.api.models.Collection import Collection
 
 

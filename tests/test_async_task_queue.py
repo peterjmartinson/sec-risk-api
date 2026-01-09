@@ -40,8 +40,8 @@ class TestAPIImmediateResponse:
         Then: Response received in < 100ms with task_id
         """
         # This test will pass once we implement async endpoints
-        with patch('sec_risk_api.tasks.analyze_filing_task.delay') as mock_task, \
-             patch('sec_risk_api.api.authenticate_api_key') as mock_auth:
+        with patch('sigmak.tasks.analyze_filing_task.delay') as mock_task, \
+             patch('sigmak.api.authenticate_api_key') as mock_auth:
             # Mock authentication
             mock_auth.return_value = "test-user"
             
@@ -51,7 +51,7 @@ class TestAPIImmediateResponse:
             mock_task.return_value = mock_result
             
             from fastapi.testclient import TestClient
-            from sec_risk_api.api import app
+            from sigmak.api import app
             
             client = TestClient(app)
             
@@ -81,8 +81,8 @@ class TestAPIImmediateResponse:
         When: POST /index is called
         Then: Response received immediately with task_id
         """
-        with patch('sec_risk_api.tasks.index_filing_task.delay') as mock_task, \
-             patch('sec_risk_api.api.authenticate_api_key') as mock_auth:
+        with patch('sigmak.tasks.index_filing_task.delay') as mock_task, \
+             patch('sigmak.api.authenticate_api_key') as mock_auth:
             mock_auth.return_value = "test-user"
             
             mock_result = Mock()
@@ -90,7 +90,7 @@ class TestAPIImmediateResponse:
             mock_task.return_value = mock_result
             
             from fastapi.testclient import TestClient
-            from sec_risk_api.api import app
+            from sigmak.api import app
             
             client = TestClient(app)
             
@@ -127,10 +127,10 @@ class TestTaskStatusReporting:
         Then: Status is 'PENDING'
         """
         from fastapi.testclient import TestClient
-        from sec_risk_api.api import app
+        from sigmak.api import app
         
-        with patch('sec_risk_api.tasks.celery_app.AsyncResult') as mock_result_cls, \
-             patch('sec_risk_api.api.authenticate_api_key') as mock_auth:
+        with patch('sigmak.tasks.celery_app.AsyncResult') as mock_result_cls, \
+             patch('sigmak.api.authenticate_api_key') as mock_auth:
             mock_auth.return_value = "test-user"
             
             mock_result = Mock()
@@ -157,10 +157,10 @@ class TestTaskStatusReporting:
         Then: Status is 'PROGRESS' with progress percentage
         """
         from fastapi.testclient import TestClient
-        from sec_risk_api.api import app
+        from sigmak.api import app
         
-        with patch('sec_risk_api.tasks.celery_app.AsyncResult') as mock_result_cls, \
-             patch('sec_risk_api.api.authenticate_api_key') as mock_auth:
+        with patch('sigmak.tasks.celery_app.AsyncResult') as mock_result_cls, \
+             patch('sigmak.api.authenticate_api_key') as mock_auth:
             mock_auth.return_value = "test-user"
             
             mock_result = Mock()
@@ -194,10 +194,10 @@ class TestTaskStatusReporting:
         Then: Status is 'SUCCESS' with full result
         """
         from fastapi.testclient import TestClient
-        from sec_risk_api.api import app
+        from sigmak.api import app
         
-        with patch('sec_risk_api.tasks.celery_app.AsyncResult') as mock_result_cls, \
-             patch('sec_risk_api.api.authenticate_api_key') as mock_auth:
+        with patch('sigmak.tasks.celery_app.AsyncResult') as mock_result_cls, \
+             patch('sigmak.api.authenticate_api_key') as mock_auth:
             mock_auth.return_value = "test-user"
             
             mock_result = Mock()
@@ -230,10 +230,10 @@ class TestTaskStatusReporting:
         Then: Status is 'FAILURE' with error message
         """
         from fastapi.testclient import TestClient
-        from sec_risk_api.api import app
+        from sigmak.api import app
         
-        with patch('sec_risk_api.tasks.celery_app.AsyncResult') as mock_result_cls, \
-             patch('sec_risk_api.api.authenticate_api_key') as mock_auth:
+        with patch('sigmak.tasks.celery_app.AsyncResult') as mock_result_cls, \
+             patch('sigmak.api.authenticate_api_key') as mock_auth:
             mock_auth.return_value = "test-user"
             
             mock_result = Mock()
@@ -269,7 +269,7 @@ class TestQueueFailureRecovery:
         When: Task execution is attempted
         Then: Task retries with exponential backoff
         """
-        from sec_risk_api.tasks import analyze_filing_task
+        from sigmak.tasks import analyze_filing_task
         
         # Mock the task to track retry behavior
         with patch.object(analyze_filing_task, 'retry') as mock_retry:
@@ -295,7 +295,7 @@ class TestQueueFailureRecovery:
         When: All retries are exhausted
         Then: Task state is FAILURE with error details
         """
-        from sec_risk_api.tasks import analyze_filing_task
+        from sigmak.tasks import analyze_filing_task
         
         # This tests the max_retries configuration
         assert hasattr(analyze_filing_task, 'max_retries')
@@ -310,7 +310,7 @@ class TestQueueFailureRecovery:
         Then: Incomplete tasks are re-queued or marked as failed
         """
         # This is an integration test that verifies Celery's acks_late=True
-        from sec_risk_api.tasks import analyze_filing_task
+        from sigmak.tasks import analyze_filing_task
         
         # Task should be configured with acks_late=True for crash recovery
         # This ensures tasks are not lost if worker crashes
@@ -326,10 +326,10 @@ class TestQueueFailureRecovery:
         Then: Returns 503 Service Unavailable with clear message
         """
         from fastapi.testclient import TestClient
-        from sec_risk_api.api import app
+        from sigmak.api import app
         
-        with patch('sec_risk_api.tasks.analyze_filing_task.delay') as mock_task, \
-             patch('sec_risk_api.api.authenticate_api_key') as mock_auth:
+        with patch('sigmak.tasks.analyze_filing_task.delay') as mock_task, \
+             patch('sigmak.api.authenticate_api_key') as mock_auth:
             mock_auth.return_value = "test-user"
             
             # Simulate Redis connection failure
@@ -367,13 +367,13 @@ class TestEndToEndIntegration:
         Then: Task progresses from PENDING → PROGRESS → SUCCESS
         """
         from fastapi.testclient import TestClient
-        from sec_risk_api.api import app
+        from sigmak.api import app
         
         client = TestClient(app)
         
         # Step 1: Submit analysis request
-        with patch('sec_risk_api.tasks.analyze_filing_task.delay') as mock_task, \
-             patch('sec_risk_api.api.authenticate_api_key') as mock_auth:
+        with patch('sigmak.tasks.analyze_filing_task.delay') as mock_task, \
+             patch('sigmak.api.authenticate_api_key') as mock_auth:
             mock_auth.return_value = "test-user"
             
             mock_result = Mock()
@@ -397,8 +397,8 @@ class TestEndToEndIntegration:
         states = ["PENDING", "PROGRESS", "SUCCESS"]
         
         for state in states:
-            with patch('sec_risk_api.tasks.celery_app.AsyncResult') as mock_result_cls, \
-                 patch('sec_risk_api.api.authenticate_api_key') as mock_auth:
+            with patch('sigmak.tasks.celery_app.AsyncResult') as mock_result_cls, \
+                 patch('sigmak.api.authenticate_api_key') as mock_auth:
                 mock_auth.return_value = "test-user"
                 
                 mock_result = Mock()
@@ -429,13 +429,13 @@ class TestEndToEndIntegration:
         Then: Each task has unique task_id and can be tracked independently
         """
         from fastapi.testclient import TestClient
-        from sec_risk_api.api import app
+        from sigmak.api import app
         
         client = TestClient(app)
         task_ids = []
         
-        with patch('sec_risk_api.tasks.analyze_filing_task.delay') as mock_task, \
-             patch('sec_risk_api.api.authenticate_api_key') as mock_auth:
+        with patch('sigmak.tasks.analyze_filing_task.delay') as mock_task, \
+             patch('sigmak.api.authenticate_api_key') as mock_auth:
             mock_auth.return_value = "test-user"
             
             # Submit 5 concurrent requests
@@ -471,7 +471,7 @@ class TestEndToEndIntegration:
         Then: Eventually receives SUCCESS with result
         """
         from fastapi.testclient import TestClient
-        from sec_risk_api.api import app
+        from sigmak.api import app
         
         client = TestClient(app)
         task_id = "polling-test-123"
@@ -484,8 +484,8 @@ class TestEndToEndIntegration:
         ]
         
         for state, info_or_result in states_sequence:
-            with patch('sec_risk_api.tasks.celery_app.AsyncResult') as mock_result_cls, \
-                 patch('sec_risk_api.api.authenticate_api_key') as mock_auth:
+            with patch('sigmak.tasks.celery_app.AsyncResult') as mock_result_cls, \
+                 patch('sigmak.api.authenticate_api_key') as mock_auth:
                 mock_auth.return_value = "test-user"
                 
                 mock_result = Mock()

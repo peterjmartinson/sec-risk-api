@@ -7,7 +7,7 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 
-from sec_risk_api.processing import chunk_risk_section
+from sigmak.processing import chunk_risk_section
 
 # Setup basic logging
 logging.basicConfig(level=logging.INFO)

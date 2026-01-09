@@ -5,7 +5,7 @@ import pytest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import List, Dict, Any
-from sec_risk_api.indexing_pipeline import IndexingPipeline
+from sigmak.indexing_pipeline import IndexingPipeline
 
 
 @pytest.fixture

@@ -10,11 +10,11 @@ import hashlib
 from chromadb.api.models.Collection import Collection
 from chromadb.api import ClientAPI
 
-from sec_risk_api.init_vector_db import initialize_chroma
-from sec_risk_api.ingest import extract_text_from_file, slice_risk_factors
-from sec_risk_api.processing import chunk_risk_section
-from sec_risk_api.embeddings import EmbeddingEngine
-from sec_risk_api.reranking import CrossEncoderReranker
+from sigmak.init_vector_db import initialize_chroma
+from sigmak.ingest import extract_text_from_file, slice_risk_factors
+from sigmak.processing import chunk_risk_section
+from sigmak.embeddings import EmbeddingEngine
+from sigmak.reranking import CrossEncoderReranker
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

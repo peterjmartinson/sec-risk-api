@@ -1,5 +1,5 @@
 [project]
-name = "sec-risk-api"
+name = "sigmak"
 version = "0.1.0"
 description = "Proprietary Risk Scoring API for SEC 10-K/Q filings"
 readme = "README.md"

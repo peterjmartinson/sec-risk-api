@@ -12,7 +12,7 @@ The `slice_risk_factors()` function in the ingestion pipeline was extracting Tab
 
 ### Solution Implemented
 
-**Updated `slice_risk_factors()` logic** ([src/sec_risk_api/ingest.py](src/sec_risk_api/ingest.py)):
+**Updated `slice_risk_factors()` logic** ([src/sigmak/ingest.py](src/sigmak/ingest.py)):
 1. Find ALL occurrences of "ITEM 1A.*RISK FACTORS" pattern
 2. For each match, sample 500 characters ahead
 3. Apply heuristic: Real sections have >20 words following (prose), TOC entries have minimal text
@@ -76,7 +76,7 @@ Output:
 - ✅ Actual risk text about COVID-19, supply chains, manufacturing, regulatory compliance
 
 ### Files Modified
-- [`src/sec_risk_api/ingest.py`](src/sec_risk_api/ingest.py) (lines 59-90): Updated `slice_risk_factors()` with multi-match heuristic
+- [`src/sigmak/ingest.py`](src/sigmak/ingest.py) (lines 59-90): Updated `slice_risk_factors()` with multi-match heuristic
 - [`tests/test_ingestion.py`](tests/test_ingestion.py): Added `test_slice_risk_factors_skips_toc_entry()`
 
 ### Impact
@@ -400,10 +400,10 @@ Implemented comprehensive asynchronous task queue system using Celery + Redis to
 redis-server
 
 # Start Celery worker
-celery -A sec_risk_api.tasks worker --loglevel=info
+celery -A sigmak.tasks worker --loglevel=info
 
 # Start API server
-uvicorn sec_risk_api.api:app --reload
+uvicorn sigmak.api:app --reload
 ```
 
 **Submit Async Analysis**:
@@ -454,8 +454,8 @@ curl -X GET "http://localhost:8000/tasks/a1b2c3d4-..." \
 ```
 
 ### Files Modified:
-- ✅ `src/sec_risk_api/tasks.py` (NEW): Celery task definitions
-- ✅ `src/sec_risk_api/api.py`: Added async endpoints and status polling
+- ✅ `src/sigmak/tasks.py` (NEW): Celery task definitions
+- ✅ `src/sigmak/api.py`: Added async endpoints and status polling
 - ✅ `tests/test_async_task_queue.py` (NEW): 13 comprehensive tests
 - ✅ `pyproject.toml`: Added celery>=5.3.0, redis>=5.0.0 dependencies
 - ✅ `JOURNAL.md`: This entry
@@ -764,7 +764,7 @@ Implemented production-ready REST API using FastAPI with full Pydantic validatio
    - Fixed: Added explicit None check with HTTPException(400) before file operations
 
 ### Artifacts
-- `src/sec_risk_api/api.py`: 447 lines, 3 endpoints, 5 Pydantic models
+- `src/sigmak/api.py`: 447 lines, 3 endpoints, 5 Pydantic models
 - `tests/test_api.py`: 520 lines, 22 tests across 7 test classes
 - README.md: Updated with API usage examples (cURL, Python requests)
 

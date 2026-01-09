@@ -29,8 +29,8 @@ import logging
 import json
 import re
 
-from sec_risk_api.indexing_pipeline import IndexingPipeline
-from sec_risk_api.scoring import RiskScorer, RiskScore
+from sigmak.indexing_pipeline import IndexingPipeline
+from sigmak.scoring import RiskScorer, RiskScore
 
 logger = logging.getLogger(__name__)
 
