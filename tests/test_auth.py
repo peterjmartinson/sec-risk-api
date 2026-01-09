@@ -9,8 +9,8 @@ from pathlib import Path
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from sec_risk_api.api import app
-from sec_risk_api.auth import APIKeyManager, authenticate_api_key
+from sigmak.api import app
+from sigmak.auth import APIKeyManager, authenticate_api_key
 
 
 @pytest.fixture
@@ -65,7 +65,7 @@ class TestAuthenticationLogic:
         """Test successful authentication with valid API key."""
         key = key_manager.create_key("test_user")
         # Temporarily set the global key manager to use our test instance
-        from sec_risk_api import auth
+        from sigmak import auth
         original_manager = auth.key_manager
         auth.key_manager = key_manager
         try:

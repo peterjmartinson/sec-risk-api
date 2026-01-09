@@ -1,0 +1,58 @@
+{
+  "EXAMPLE_API_KEY_1": {
+    "user": "example_user",
+    "rate_limit": 10
+  },
+  "EXAMPLE_API_KEY_2": {
+    "user": "premium_example",
+    "rate_limit": 50
+  },
+  "VYp1f6GY5MLarfjN-B98iVMVME3ODr_tx4dncIx_WYw": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "QJXQaH1T8w1hQm7bq412yFQqjlwKeDr40g_uZo3vOf8": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "Y7KmnOPMMF5UY2Fqow38aKnKDwZget4R5hUWGfx3Vzc": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "d7YJBexExGfDJJNuo7hQhlJ4ktiFRfudBIaBXOiv8g0": {
+    "user": "basic_user",
+    "rate_limit": 5
+  },
+  "h5lrStJfB-PPJxbEP1UxoyvDccZdJ3Tb3YOcMF0oa7g": {
+    "user": "premium_user",
+    "rate_limit": 50
+  },
+  "bYoGs1p7TY4dUyxmzO1yE9su2xfvwZ3Z_jf9R22A3fw": {
+    "user": "user",
+    "rate_limit": 20
+  },
+  "jeLR3F6t43s68HY9D1kwYN1aviv4z1NtUftrWhnM1SQ": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "9zOB_D8YEubf2MwRWbikjX_thnAjWk4XfMSe7nKU9fE": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "nu3EVseM9i-_d1Ew3PN3BLXEOUAUXHp9U41msXQPBzA": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "L2z5_cIt2R1OZGg7CXDHSx2zA563Aa5L9dyYDBWhKBY": {
+    "user": "basic_user",
+    "rate_limit": 5
+  },
+  "KcIvFHByuwGPlrSn1FCu6sNjgMUQDDpuqGdCwIUHrcE": {
+    "user": "premium_user",
+    "rate_limit": 50
+  },
+  "YUDWdCvvSRZDo50Dev7Sf4juARfZplx_yv0IXVoTRHU": {
+    "user": "user",
+    "rate_limit": 20
+  }
+}

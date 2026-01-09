@@ -1,4 +1,4 @@
-# Repository Instructions: SEC Proprietary Risk API
+# Repository Instructions: SigmaK
 
 ## 🎯 The Mission
 You are building a high-fidelity intelligence layer for SEC filings. 

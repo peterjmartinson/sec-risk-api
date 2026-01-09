@@ -2,7 +2,7 @@
 # This software is proprietary and not licensed for use, modification, or distribution.
 
 import pytest
-from sec_risk_api.embeddings import EmbeddingEngine
+from sigmak.embeddings import EmbeddingEngine
 
 
 @pytest.fixture(scope="session")

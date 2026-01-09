@@ -11,10 +11,10 @@ Endpoints:
 
 Usage:
     # Start server
-    uvicorn sec_risk_api.api:app --reload
+    uvicorn sigmak.api:app --reload
     
     # Or with uv
-    uv run uvicorn sec_risk_api.api:app --reload
+    uv run uvicorn sigmak.api:app --reload
     
     # Test endpoint
     curl -X POST "http://localhost:8000/analyze" \\
@@ -35,12 +35,12 @@ from pathlib import Path
 import logging
 import re
 
-from sec_risk_api.integration import IntegrationPipeline, IntegrationError, RiskAnalysisResult
-from sec_risk_api.auth import limiter, authenticate_api_key, rate_limit_key_func, API_KEY_HEADER
+from sigmak.integration import IntegrationPipeline, IntegrationError, RiskAnalysisResult
+from sigmak.auth import limiter, authenticate_api_key, rate_limit_key_func, API_KEY_HEADER
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
-from sec_risk_api.tasks import celery_app, analyze_filing_task, index_filing_task
-from sec_risk_api.monitoring import (
+from sigmak.tasks import celery_app, analyze_filing_task, index_filing_task
+from sigmak.monitoring import (
     check_redis_connection,
     check_chroma_connection,
     _shutdown_handler
@@ -249,7 +249,7 @@ class TaskStatusResponse(BaseModel):
 # ============================================================================
 
 app = FastAPI(
-    title="SEC Risk Scoring API",
+    title="SigmaK API",
     description=(
         "RESTful API for analyzing SEC filings and computing severity/novelty scores. "
         "Extracts Item 1A risk factors, computes semantic embeddings, and scores each risk "
@@ -790,11 +790,11 @@ async def get_task_status(
 @app.on_event("startup")
 async def startup_event() -> None:
     """Initialize resources on startup."""
-    logger.info(f"Starting SEC Risk Scoring API v{API_VERSION}")
+    logger.info(f"Starting SigmaK API v{API_VERSION}")
     logger.info(f"Pipeline initialized at: {pipeline.persist_path}")
 
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
     """Clean up resources on shutdown."""
-    logger.info("Shutting down SEC Risk Scoring API")
+    logger.info("Shutting down SigmaK API")

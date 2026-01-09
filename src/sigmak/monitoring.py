@@ -13,7 +13,7 @@ Features:
 - Graceful shutdown handling
 
 Usage:
-    from sec_risk_api.monitoring import log_api_request, MetricsCollector
+    from sigmak.monitoring import log_api_request, MetricsCollector
     
     # Log API request
     log_api_request(
@@ -41,7 +41,7 @@ from datetime import datetime
 from contextlib import contextmanager
 import threading
 
-from sec_risk_api.config import get_config, Config
+from sigmak.config import get_config, Config
 
 # Setup logger
 logger = logging.getLogger(__name__)

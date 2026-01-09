@@ -8,7 +8,7 @@ Usage:
 
 import sys
 from pathlib import Path
-from sec_risk_api.integration import IntegrationPipeline
+from sigmak.integration import IntegrationPipeline
 
 def main():
     if len(sys.argv) != 4:

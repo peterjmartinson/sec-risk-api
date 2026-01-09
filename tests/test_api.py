@@ -18,8 +18,8 @@ from typing import Dict, Any, List
 from pathlib import Path
 import json
 
-from sec_risk_api.api import app
-from sec_risk_api.auth import key_manager
+from sigmak.api import app
+from sigmak.auth import key_manager
 
 
 # ============================================================================

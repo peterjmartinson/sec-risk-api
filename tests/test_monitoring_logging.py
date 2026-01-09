@@ -36,9 +36,9 @@ class TestStructuredLogging:
         When: Request completes
         Then: Latency is logged in milliseconds
         """
-        from sec_risk_api.monitoring import log_api_request
+        from sigmak.monitoring import log_api_request
         
-        with patch('sec_risk_api.monitoring.logger') as mock_logger:
+        with patch('sigmak.monitoring.logger') as mock_logger:
             log_api_request(
                 endpoint="/analyze",
                 method="POST",
@@ -60,9 +60,9 @@ class TestStructuredLogging:
         When: Response is received
         Then: Token usage is logged (input + output)
         """
-        from sec_risk_api.monitoring import log_llm_usage
+        from sigmak.monitoring import log_llm_usage
         
-        with patch('sec_risk_api.monitoring.logger') as mock_logger:
+        with patch('sigmak.monitoring.logger') as mock_logger:
             log_llm_usage(
                 model="gpt-4",
                 prompt_tokens=150,
@@ -84,9 +84,9 @@ class TestStructuredLogging:
         When: Error is logged
         Then: Stack trace and request context are captured
         """
-        from sec_risk_api.monitoring import log_error
+        from sigmak.monitoring import log_error
         
-        with patch('sec_risk_api.monitoring.logger') as mock_logger:
+        with patch('sigmak.monitoring.logger') as mock_logger:
             try:
                 raise ValueError("Test error")
             except Exception as e:
@@ -110,7 +110,7 @@ class TestStructuredLogging:
         When: Log is formatted
         Then: Output is valid JSON with standard fields
         """
-        from sec_risk_api.monitoring import JSONFormatter
+        from sigmak.monitoring import JSONFormatter
         
         formatter = JSONFormatter()
         
@@ -151,7 +151,7 @@ class TestMetricsCollection:
         When: Requests are processed
         Then: Counter increments for each request
         """
-        from sec_risk_api.monitoring import MetricsCollector
+        from sigmak.monitoring import MetricsCollector
         
         collector = MetricsCollector()
         
@@ -171,7 +171,7 @@ class TestMetricsCollection:
         When: Latencies are recorded
         Then: Can calculate p50, p95, p99
         """
-        from sec_risk_api.monitoring import MetricsCollector
+        from sigmak.monitoring import MetricsCollector
         
         collector = MetricsCollector()
         
@@ -192,7 +192,7 @@ class TestMetricsCollection:
         When: Responses are recorded
         Then: Error rate is calculable
         """
-        from sec_risk_api.monitoring import MetricsCollector
+        from sigmak.monitoring import MetricsCollector
         
         collector = MetricsCollector()
         
@@ -219,7 +219,7 @@ class TestMetricsCollection:
         When: Tasks complete
         Then: Task count, latency, and status are tracked
         """
-        from sec_risk_api.monitoring import MetricsCollector
+        from sigmak.monitoring import MetricsCollector
         
         collector = MetricsCollector()
         
@@ -246,7 +246,7 @@ class TestHealthChecks:
         Then: Returns 200 with status details
         """
         from fastapi.testclient import TestClient
-        from sec_risk_api.api import app
+        from sigmak.api import app
         
         client = TestClient(app)
         response = client.get("/health")
@@ -265,10 +265,10 @@ class TestHealthChecks:
         Then: Returns 200 only if all dependencies are healthy
         """
         from fastapi.testclient import TestClient
-        from sec_risk_api.api import app
+        from sigmak.api import app
         
-        with patch('sec_risk_api.api.check_redis_connection') as mock_redis, \
-             patch('sec_risk_api.api.check_chroma_connection') as mock_chroma:
+        with patch('sigmak.api.check_redis_connection') as mock_redis, \
+             patch('sigmak.api.check_chroma_connection') as mock_chroma:
             
             # All dependencies healthy
             mock_redis.return_value = True
@@ -292,10 +292,10 @@ class TestHealthChecks:
         Then: Returns 503 with dependency status
         """
         from fastapi.testclient import TestClient
-        from sec_risk_api.api import app
+        from sigmak.api import app
         
-        with patch('sec_risk_api.api.check_redis_connection') as mock_redis, \
-             patch('sec_risk_api.api.check_chroma_connection') as mock_chroma:
+        with patch('sigmak.api.check_redis_connection') as mock_redis, \
+             patch('sigmak.api.check_chroma_connection') as mock_chroma:
             
             mock_redis.return_value = False
             mock_chroma.return_value = True
@@ -316,7 +316,7 @@ class TestHealthChecks:
         Then: Returns 200 in < 100ms
         """
         from fastapi.testclient import TestClient
-        from sec_risk_api.api import app
+        from sigmak.api import app
         import time
         
         client = TestClient(app)
@@ -344,9 +344,9 @@ class TestErrorTracking:
         When: Error is logged
         Then: Request ID is included for correlation
         """
-        from sec_risk_api.monitoring import log_error
+        from sigmak.monitoring import log_error
         
-        with patch('sec_risk_api.monitoring.logger') as mock_logger:
+        with patch('sigmak.monitoring.logger') as mock_logger:
             error = ValueError("Test error")
             log_error(
                 error=error,
@@ -365,9 +365,9 @@ class TestErrorTracking:
         When: Error is logged
         Then: Alert is sent to monitoring system
         """
-        from sec_risk_api.monitoring import log_critical_error
+        from sigmak.monitoring import log_critical_error
         
-        with patch('sec_risk_api.monitoring.send_alert') as mock_alert:
+        with patch('sigmak.monitoring.send_alert') as mock_alert:
             error = ConnectionError("Database connection lost")
             log_critical_error(error, severity="high")
             
@@ -383,9 +383,9 @@ class TestErrorTracking:
         When: Metrics are evaluated
         Then: Alert is triggered
         """
-        from sec_risk_api.monitoring import check_error_rate_threshold
+        from sigmak.monitoring import check_error_rate_threshold
         
-        with patch('sec_risk_api.monitoring.send_alert') as mock_alert:
+        with patch('sigmak.monitoring.send_alert') as mock_alert:
             # Simulate 10% error rate
             check_error_rate_threshold(
                 total_requests=100,
@@ -404,7 +404,7 @@ class TestErrorTracking:
         When: Exceptions are logged
         Then: Each is tagged with category (client, server, dependency)
         """
-        from sec_risk_api.monitoring import categorize_exception
+        from sigmak.monitoring import categorize_exception
         
         assert categorize_exception(ValueError()) == 'client_error'
         assert categorize_exception(ConnectionError()) == 'dependency_error'
@@ -427,7 +427,7 @@ class TestDeploymentReadiness:
         Then: Configuration is loaded correctly
         """
         import os
-        from sec_risk_api.config import get_config, reset_config
+        from sigmak.config import get_config, reset_config
         
         with patch.dict(os.environ, {
             'REDIS_URL': 'redis://test:6379',
@@ -451,7 +451,7 @@ class TestDeploymentReadiness:
         When: Shutdown is initiated
         Then: Active requests complete before shutdown
         """
-        from sec_risk_api.monitoring import GracefulShutdown
+        from sigmak.monitoring import GracefulShutdown
         
         shutdown_handler = GracefulShutdown(timeout=30)
         
@@ -477,7 +477,7 @@ class TestDeploymentReadiness:
         When: Signal is handled
         Then: Graceful shutdown is initiated
         """
-        from sec_risk_api.monitoring import setup_signal_handlers
+        from sigmak.monitoring import setup_signal_handlers
         import signal
         
         shutdown_called = []
@@ -507,7 +507,7 @@ class TestPerformanceMonitoring:
         When: Operation completes
         Then: Latency is logged and metrics updated
         """
-        from sec_risk_api.monitoring import track_operation, _metrics_collector
+        from sigmak.monitoring import track_operation, _metrics_collector
         
         initial_metrics = len(list(_metrics_collector._histograms.keys()))
         
@@ -527,9 +527,9 @@ class TestPerformanceMonitoring:
         When: Query completes
         Then: Query time and result count are logged
         """
-        from sec_risk_api.monitoring import log_db_query
+        from sigmak.monitoring import log_db_query
         
-        with patch('sec_risk_api.monitoring.logger') as mock_logger:
+        with patch('sigmak.monitoring.logger') as mock_logger:
             log_db_query(
                 operation='similarity_search',
                 latency_ms=234.5,
@@ -547,7 +547,7 @@ class TestPerformanceMonitoring:
         When: Memory metrics are collected
         Then: Current and peak memory are tracked
         """
-        from sec_risk_api.monitoring import get_memory_stats
+        from sigmak.monitoring import get_memory_stats
         
         stats = get_memory_stats()
         

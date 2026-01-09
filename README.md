@@ -1,8 +1,8 @@
-# Scream Sheet: Proprietary Risk Scoring API
+# SigmaK: Proprietary Risk Scoring API
 
-[![CI](https://github.com/peterjmartinson/sec-risk-api/actions/workflows/ci.yml/badge.svg)](https://github.com/peterjmartinson/sec-risk-api/actions/workflows/ci.yml)
+[![CI](https://github.com/peterjmartinson/sigmak/actions/workflows/ci.yml/badge.svg)](https://github.com/peterjmartinson/sigmak/actions/workflows/ci.yml)
 
-A RAG-powered pipeline designed to quantify novelty and severity in SEC **Item
+**SigmaK** is a RAG-powered pipeline designed to quantify novelty and severity in SEC **Item
 1A: Risk Factors** disclosures. This system ingests structured HTML/XBRL
 filings, extracts specific risk sections, and indexes them into a
 high-dimensional vector space for semantic analysis.
@@ -121,7 +121,7 @@ uv run python analyze_filing.py data/filings/tsla-20241231.htm TSLA 2024
 Index a 10-K HTML filing into the vector database:
 
 ```python
-from sec_risk_api.indexing_pipeline import IndexingPipeline
+from sigmak.indexing_pipeline import IndexingPipeline
 
 # Initialize the pipeline
 pipeline = IndexingPipeline(persist_path="./chroma_db")
@@ -197,7 +197,7 @@ results = pipeline.semantic_search(
 Quantify the **Severity** and **Novelty** of risk disclosures:
 
 ```python
-from sec_risk_api.scoring import RiskScorer
+from sigmak.scoring import RiskScorer
 
 # Initialize scorer
 scorer = RiskScorer()
@@ -243,7 +243,7 @@ scores = scorer.calculate_severity_batch(chunks)
 Run the complete analysis pipeline from HTML filing to structured risk scores:
 
 ```python
-from sec_risk_api.integration import IntegrationPipeline
+from sigmak.integration import IntegrationPipeline
 
 # Initialize integration pipeline
 pipeline = IntegrationPipeline(persist_path="./chroma_db")
@@ -319,19 +319,19 @@ The system exposes a FastAPI REST interface with **asynchronous task processing*
 redis-server
 
 # 2. Start Celery worker (in separate terminal)
-celery -A sec_risk_api.tasks worker --loglevel=info
+celery -A sigmak.tasks worker --loglevel=info
 
 # 3. Start API server (in separate terminal)
-uv run uvicorn sec_risk_api.api:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn sigmak.api:app --reload --host 0.0.0.0 --port 8000
 ```
 
 **Production Deployment**:
 ```bash
 # Run multiple workers for horizontal scaling
-celery -A sec_risk_api.tasks worker --concurrency=4 --loglevel=info
+celery -A sigmak.tasks worker --concurrency=4 --loglevel=info
 
 # Optional: Use Flower for monitoring
-celery -A sec_risk_api.tasks flower
+celery -A sigmak.tasks flower
 ```
 
 ### API Endpoints
@@ -535,7 +535,7 @@ Health check endpoint (no authentication required).
 
 **Creating API Keys**:
 ```python
-from sec_risk_api.auth import APIKeyManager
+from sigmak.auth import APIKeyManager
 
 manager = APIKeyManager()
 
@@ -626,7 +626,7 @@ CHROMA_PERSIST_PATH=/app/chroma_db
 1. **Create Droplet**:
 ```bash
 # Recommended: Ubuntu 22.04 LTS, 4GB RAM minimum
-doctl compute droplet create sec-risk-api \
+doctl compute droplet create sigmak \
   --image ubuntu-22-04-x64 \
   --size s-2vcpu-4gb \
   --region nyc3 \
@@ -653,8 +653,8 @@ apt-get install docker-compose-plugin -y
 
 4. **Clone Repository**:
 ```bash
-git clone https://github.com/your-username/sec-risk-api.git
-cd sec-risk-api
+git clone https://github.com/your-username/sigmak.git
+cd sigmak
 ```
 
 5. **Configure Environment**:
@@ -690,7 +690,7 @@ ufw enable
 apt-get install nginx certbot python3-certbot-nginx -y
 
 # Configure Nginx as reverse proxy
-cat > /etc/nginx/sites-available/sec-risk-api <<'EOF'
+cat > /etc/nginx/sites-available/sigmak <<'EOF'
 server {
     listen 80;
     server_name your-domain.com;
@@ -703,7 +703,7 @@ server {
 }
 EOF
 
-ln -s /etc/nginx/sites-available/sec-risk-api /etc/nginx/sites-enabled/
+ln -s /etc/nginx/sites-available/sigmak /etc/nginx/sites-enabled/
 systemctl reload nginx
 
 # Get SSL certificate
@@ -752,13 +752,13 @@ docker-compose logs api | jq .
 **Celery Workers**:
 ```bash
 # Adjust concurrency (default: 2)
-celery -A sec_risk_api.tasks worker --concurrency=4
+celery -A sigmak.tasks worker --concurrency=4
 ```
 
 **API Server**:
 ```bash
 # Run multiple workers with Gunicorn
-gunicorn sec_risk_api.api:app \
+gunicorn sigmak.api:app \
   --workers 4 \
   --worker-class uvicorn.workers.UvicornWorker \
   --bind 0.0.0.0:8000

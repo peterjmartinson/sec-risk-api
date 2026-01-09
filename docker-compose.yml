@@ -24,7 +24,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: sec-risk-api
+    container_name: sigmak
     ports:
       - "8000:8000"
     environment:
@@ -46,7 +46,7 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
-    command: uvicorn sec_risk_api.api:app --host 0.0.0.0 --port 8000
+    command: uvicorn sigmak.api:app --host 0.0.0.0 --port 8000
 
   # Celery Worker - Background task processing
   worker:
@@ -67,7 +67,7 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    command: celery -A sec_risk_api.tasks worker --loglevel=info --concurrency=2
+    command: celery -A sigmak.tasks worker --loglevel=info --concurrency=2
 
 volumes:
   redis_data:

@@ -5,7 +5,7 @@ import pytest
 import os
 from chromadb.api import ClientAPI
 from chromadb.api.models.Collection import Collection
-from sec_risk_api.init_vector_db import initialize_chroma
+from sigmak.init_vector_db import initialize_chroma
 
 
 @pytest.mark.slow

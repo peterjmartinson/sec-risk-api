@@ -21,7 +21,7 @@ import logging
 import numpy as np
 from numpy.typing import NDArray
 
-from sec_risk_api.embeddings import EmbeddingEngine
+from sigmak.embeddings import EmbeddingEngine
 
 logger = logging.getLogger(__name__)
 

@@ -3,7 +3,7 @@
 
 import pytest
 
-from sec_risk_api.ingest import (extract_text_from_file, parse_sec_html,
+from sigmak.ingest import (extract_text_from_file, parse_sec_html,
                                  slice_risk_factors)
 
 
