@@ -7,6 +7,8 @@
 filings, extracts specific risk sections, and indexes them into a
 high-dimensional vector space for semantic analysis.
 
+> **Note**: Currently, the system uses **local ML models** (sentence-transformers) and **keyword-based algorithms** for risk scoring. No LLM API calls are made. See [LLM_API_INTEGRATION_STATUS.md](LLM_API_INTEGRATION_STATUS.md) for details on the current implementation and future LLM integration plans.
+
 ## System Architecture
 
 The application follows a modular "Extraction-to-Storage" flow with **asynchronous task processing**:
@@ -40,6 +42,8 @@ The system uses a proprietary 10-category classification for SEC risk factors:
 | **OTHER** | Miscellaneous | Company-specific edge cases |
 
 **Prompt Engineering**: Version-controlled system prompts in `prompts/` directory enforce structured classification with source citation requirements.
+
+> **Current Implementation**: Risk scoring currently uses **keyword-based algorithms** and **semantic embeddings** (sentence-transformers). The prompt infrastructure is ready for future LLM classification integration. See [LLM_API_INTEGRATION_STATUS.md](LLM_API_INTEGRATION_STATUS.md) for details.
 
 ### Storage & Retrieval
 
