@@ -245,7 +245,9 @@ class RiskClassifierWithLLM:
         llm_result = self.llm_classifier.classify(text)
         
         # Generate embedding for storage
-        embedding = self.embedding_engine.encode([text])[0].tolist()
+        embedding_result = self.embedding_engine.encode([text])[0]
+        # Handle both numpy arrays and lists (for testing)
+        embedding = embedding_result.tolist() if hasattr(embedding_result, 'tolist') else embedding_result
         
         # Store in cache
         storage_record = LLMStorageRecord(
