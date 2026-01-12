@@ -294,5 +294,53 @@
   "bDMBkm_tCm7D68b8R-MkzPzU5A_mP5HewY8pmNzLJD8": {
     "user": "user",
     "rate_limit": 20
+  },
+  "-Bm8zM41rJohsqzDJzbd5ZokKtjDSUtkrwA81MNZMBM": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "YhjcY7wdxICX1ZtVUxCjS_F8dtTSIMvRf390_hrJOR4": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "M24sB4RWYK9FIHbopkP1i1beThQCDJU2s4BJNBzG9PA": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "Tk2PWVCvQShWquM0OvbDWe4__0cPAigM3g6roZ-nSxM": {
+    "user": "basic_user",
+    "rate_limit": 5
+  },
+  "KL3rqvlEim3ANR8tiCX4qCkxMEHtlEz85jZMpUCG1CI": {
+    "user": "premium_user",
+    "rate_limit": 50
+  },
+  "vxt_bB_taVh0jlTpmPy0qhCm7sMQLEMYYGRBxAzSbbU": {
+    "user": "user",
+    "rate_limit": 20
+  },
+  "PajymLFEwYtZz3lKbcJK0YJ10v2TxeqvyAu5WayG7QM": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "BEVISlQuW3UpLB-WMVt1Df0PzizWvd4gmvwPh8UiDro": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "BecvQON2CvpttbrJBtia9WHRCM0rrd0vW_q-I6aw9gY": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "yj_Sdt1ojpKqFYMPXXSvS5eh1jhW3fr_HU6NZFUgI-g": {
+    "user": "basic_user",
+    "rate_limit": 5
+  },
+  "KY2P9EYLzaVEyvepHiNvVBXsizsB6x489YZomZdBqm0": {
+    "user": "premium_user",
+    "rate_limit": 50
+  },
+  "2AcMeN0gXb-uX1-e7MAM3DgmmOkoNtEVlHQEoNS5ftw": {
+    "user": "user",
+    "rate_limit": 20
   }
 }

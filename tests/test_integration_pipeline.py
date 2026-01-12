@@ -45,7 +45,7 @@ def temp_db_path() -> str:
 @pytest.fixture
 def sample_html_path() -> Path:
     """Path to sample 10-K HTML file."""
-    return Path("data/sample_10k.html")
+    return Path("data/samples/sample_10k.html")
 
 
 @pytest.fixture

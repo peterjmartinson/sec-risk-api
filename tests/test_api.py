@@ -50,7 +50,7 @@ def auth_headers(api_key: str) -> Dict[str, str]:
 @pytest.fixture
 def sample_html_path() -> Path:
     """Path to sample 10-K HTML file."""
-    return Path("data/sample_10k.html")
+    return Path("data/samples/sample_10k.html")
 
 
 # ============================================================================
