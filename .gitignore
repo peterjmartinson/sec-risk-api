@@ -258,4 +258,5 @@ api_keys.json
 
 # Keep the package `src/sigmak/downloads/` tracked (negate global downloads/ ignore)
 !src/sigmak/downloads/
-!src/sigmak/downloads/**
+!src/sigmak/downloads/*.py
+!src/sigmak/downloads/**/*.py
