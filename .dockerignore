@@ -47,7 +47,7 @@ htmlcov/
 Thumbs.db
 
 # Project specific
-chroma_db/
+database/
 logs/
 *.log
 api_keys.json

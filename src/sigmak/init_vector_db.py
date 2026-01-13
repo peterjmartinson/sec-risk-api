@@ -5,7 +5,7 @@ from chromadb.api.models.Collection import Collection
 import os
 from typing import Tuple
 
-def initialize_chroma(persist_path: str = "./chroma_db") -> Tuple[ClientAPI, Collection]:
+def initialize_chroma(persist_path: str = "./database") -> Tuple[ClientAPI, Collection]:
     """
     Initializes a persistent ChromaDB client and creates the risk_factors
     collection.

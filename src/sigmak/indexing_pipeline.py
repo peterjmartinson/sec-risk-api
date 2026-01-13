@@ -39,7 +39,7 @@ class IndexingPipeline:
 
     def __init__(
         self,
-        persist_path: str = "./chroma_db",
+        persist_path: str = "./database",
         embedding_model: str = "all-MiniLM-L6-v2"
     ) -> None:
         """

@@ -10,10 +10,13 @@ high-dimensional vector space for semantic analysis.
 ## Key Features
 
 - **Hybrid Risk Classification**: Combines vector search with LLM fallback for confident classification
+- **Dual Storage Architecture**: SQLite for provenance + ChromaDB for semantic search
 - **Smart LLM Caching**: Stores all LLM responses to reduce future API costs
+- **Drift Detection**: Periodic review jobs detect classification quality degradation over time
 - **Threshold-Based Routing**: Automatic fallback to Gemini 2.5 Flash Lite for low-confidence matches
 - **Full Provenance Tracking**: Every classification includes method, confidence, and model version
 - **Async Task Processing**: Non-blocking API with Celery + Redis for production deployments
+- **Embedding Versioning**: Archive and migrate embeddings when models change
 
 ## System Architecture
 
@@ -26,10 +29,11 @@ The application follows a modular "Extraction-to-Storage" flow with **asynchrono
 5. **Reranking Layer (`reranking.py`)**: Cross-encoder model (`ms-marco-MiniLM-L-6-v2`) that reranks search results for improved relevance. Processes query-document pairs jointly for superior accuracy.
 6. **Risk Classification (`risk_taxonomy.py`, `prompt_manager.py`)**: Proprietary 10-category risk taxonomy with version-controlled LLM prompts for semantic classification.
 7. **LLM Integration (`llm_classifier.py`, `llm_storage.py`, `risk_classifier.py`)**: Gemini 2.5 Flash Lite integration with threshold-based routing, intelligent caching, and full provenance tracking. Automatically falls back to LLM when vector search confidence is below 0.64, uses LLM confirmation for scores between 0.64-0.80, and directly uses vector results for scores ≥ 0.80.
-8. **Risk Scoring (`scoring.py`)**: Quantifies **Severity** (0.0-1.0) and **Novelty** (0.0-1.0) for risk disclosures using keyword analysis and semantic comparison with historical filings. Every score includes full source citation and human-readable explanation.
-9. **Orchestration Layer (`indexing_pipeline.py`)**: End-to-end pipeline coordinator that integrates extraction, chunking, embedding, storage, and hybrid search with optional reranking.
-10. **Async Task Queue (`tasks.py`)**: Celery + Redis background task processor for non-blocking API operations. All slow operations (ingestion, scoring) run in worker processes with progress tracking.
-11. **REST API (`api.py`)**: FastAPI server with async endpoints, authentication, rate limiting, and real-time task status polling.
+8. **Drift Detection System (`drift_detection.py`, `drift_scheduler.py`)**: SQLite + ChromaDB dual-storage architecture with periodic review jobs to detect classification drift. Samples low-confidence and old classifications, re-runs LLM classification, and measures agreement rate. Triggers manual review alerts when drift exceeds thresholds (< 75% agreement).
+9. **Risk Scoring (`scoring.py`)**: Quantifies **Severity** (0.0-1.0) and **Novelty** (0.0-1.0) for risk disclosures using keyword analysis and semantic comparison with historical filings. Every score includes full source citation and human-readable explanation.
+10. **Orchestration Layer (`indexing_pipeline.py`)**: End-to-end pipeline coordinator that integrates extraction, chunking, embedding, storage, and hybrid search with optional reranking.
+11. **Async Task Queue (`tasks.py`)**: Celery + Redis background task processor for non-blocking API operations. All slow operations (ingestion, scoring) run in worker processes with progress tracking.
+12. **REST API (`api.py`)**: FastAPI server with async endpoints, authentication, rate limiting, and real-time task status polling.
 
 ### Risk Taxonomy
 
@@ -579,6 +583,164 @@ The API enforces strict validation via Pydantic:
 - **retrieve_top_k**: 1-100 (default: 10)
 
 Invalid requests return **422 Unprocessable Entity** with detailed error messages.
+
+## Drift Detection System
+
+The drift detection system ensures classification quality remains consistent over time by periodically re-evaluating stored classifications.
+
+### Architecture: Dual Storage
+
+**SQLite + ChromaDB Integration**:
+- **SQLite**: Stores full classification provenance (text, category, confidence, rationale, model version, source, timestamp)
+- **ChromaDB**: Stores embeddings for semantic search with cross-reference to SQLite via `chroma_id`
+- **Deduplication**: Text hashing prevents duplicate storage
+- **Archive Versioning**: Old embeddings are archived when embedding models change
+
+**Classification Sources**:
+- `LLM`: Gemini 2.5 Flash Lite classification
+- `VECTOR`: ChromaDB similarity search result
+- `MANUAL`: Human-provided label (for training data)
+
+### Drift Review Process
+
+Periodic jobs sample classifications for quality assessment:
+
+1. **Sample Low-Confidence Records**: Target classifications with confidence < 0.75
+2. **Sample Old Records**: Target classifications older than 90 days
+3. **Re-classify with LLM**: Run current Gemini model on sampled texts
+4. **Compare Results**: Measure agreement rate between original and new classifications
+5. **Log Metrics**: Store drift statistics in database
+6. **Trigger Alerts**:
+   - **WARNING** (< 85% agreement): Log warning message
+   - **CRITICAL** (< 75% agreement): Require manual review
+
+### Running Drift Detection
+
+**Option 1: In-Process Scheduler (Development)**
+
+```python
+from sigmak.drift_scheduler import DriftScheduler
+
+# Initialize scheduler
+scheduler = DriftScheduler(
+    db_path="./database/risk_classifications.db",
+    chroma_path="./database"
+)
+
+# Start background scheduler
+scheduler.start()
+
+# Schedule daily drift review at 2 AM UTC
+scheduler.schedule_drift_review_cron(
+    hour=2,
+    minute=0,
+    sample_size=20
+)
+
+# Keep running...
+# scheduler.stop()  # Call when shutting down
+```
+
+**Option 2: Cron Job (Production)**
+
+```bash
+# Run drift review once per day (2 AM)
+0 2 * * * cd /app && /usr/local/bin/python -m sigmak.drift_scheduler --run-once --sample-size 50
+```
+
+**Systemd Timer (Alternative)**:
+
+```ini
+# /etc/systemd/system/sigmak-drift-review.timer
+[Unit]
+Description=SigmaK Drift Detection Daily Review
+
+[Timer]
+OnCalendar=daily
+OnCalendar=02:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+```ini
+# /etc/systemd/system/sigmak-drift-review.service
+[Unit]
+Description=SigmaK Drift Detection Review Job
+
+[Service]
+Type=oneshot
+WorkingDirectory=/app
+ExecStart=/usr/local/bin/python -m sigmak.drift_scheduler --run-once --sample-size 50
+User=sigmak
+StandardOutput=journal
+StandardError=journal
+```
+
+Enable and start:
+```bash
+sudo systemctl enable sigmak-drift-review.timer
+sudo systemctl start sigmak-drift-review.timer
+```
+
+### Monitoring Drift Metrics
+
+**Query Recent Drift Metrics**:
+
+```python
+from sigmak.drift_detection import DriftDetectionSystem
+
+system = DriftDetectionSystem()
+
+# Get last 10 drift reviews
+metrics = system.get_recent_drift_metrics(limit=10)
+
+for m in metrics:
+    print(f"Review at {m['timestamp']}: {m['agreement_rate']:.1%} agreement")
+    print(f"  Reviewed: {m['total_reviewed']}, Disagreements: {m['disagreements']}")
+```
+
+**View Model Statistics**:
+
+```python
+stats = system.get_model_statistics()
+print(f"Total classifications: {stats['total_records']}")
+print(f"Current model: {stats['current_model_version']}")
+print(f"Archived embeddings: {stats['archived_versions']}")
+```
+
+### Embedding Model Migration
+
+When upgrading embedding models, use the archive system to preserve old embeddings:
+
+```python
+from sigmak.drift_detection import DriftDetectionSystem
+from sigmak.embeddings import EmbeddingEngine
+
+system = DriftDetectionSystem()
+new_engine = EmbeddingEngine(model_name="all-MiniLM-L12-v2")  # Upgraded model
+
+# Get all records
+# (In production, batch this operation)
+for record_id in range(1, 1001):  # Example: first 1000 records
+    record = system.get_record_by_id(record_id)
+    if record:
+        # Re-embed with new model
+        new_embedding = new_engine.encode([record['text']])[0].tolist()
+        
+        # Archive old embedding and update
+        system.archive_and_update_embedding(
+            record_id=record_id,
+            new_embedding=new_embedding,
+            new_model_version="all-MiniLM-L12-v2"
+        )
+```
+
+**Storage Paths**:
+- SQLite Database: `./database/risk_classifications.db`
+- ChromaDB Storage: `./database/`
+- Embedding Archives: Stored in `embedding_archives` table
 
 ## Deployment
 

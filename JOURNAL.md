@@ -1,3 +1,124 @@
+## [2026-01-12] Drift Detection System with Dual Storage (COMPLETED)
+
+### Status: COMPLETED ✓
+
+### Problem
+LLM-based risk classification can degrade over time due to:
+- Model drift (LLM behavior changes)
+- Data drift (new risk patterns emerge)
+- Embedding model changes
+- No mechanism to detect or quantify classification quality degradation
+
+### Solution Implemented
+
+**Built comprehensive drift detection system** with SQLite + ChromaDB dual-storage architecture and periodic review jobs to ensure classification quality remains consistent.
+
+**Implementation Components**:
+1. `drift_detection.py` - Core dual-storage system with drift metrics
+   - `DriftDetectionSystem`: SQLite + ChromaDB integration with cross-referencing
+   - `DriftReviewJob`: Periodic sampling and re-classification
+   - `DriftMetrics`: Agreement rate statistics and threshold checking
+   
+2. `drift_scheduler.py` - APScheduler integration for automated reviews
+   - In-process background scheduler for development
+   - CLI for cron job integration in production
+   - Systemd timer documentation for enterprise deployments
+
+3. Enhanced SQLite schema with provenance tracking:
+   - `source` field: Classification origin (LLM, vector, manual)
+   - `chroma_id`: Cross-reference to ChromaDB document
+   - `archive_version`: Embedding model version tracking
+   - `last_reviewed_at`: Most recent drift review timestamp
+   - `review_count`: Number of times re-classified
+
+### Key Decisions
+
+**Dual Storage Architecture**:
+- **SQLite**: Full provenance (text, category, confidence, rationale, model version, source, timestamp)
+- **ChromaDB**: Embeddings for semantic search with metadata cross-reference
+- **Benefit**: Combine semantic search speed with full audit trail
+
+**Sampling Strategy**:
+- 60% from low-confidence classifications (< 0.75 confidence)
+- 40% from old classifications (> 90 days)
+- Default sample size: 20 per review (configurable)
+
+**Drift Thresholds**:
+- **WARNING** (< 85% agreement): Log warning, monitor for continued drift
+- **CRITICAL** (< 75% agreement): Trigger manual review alert, exit code 1 for cron monitoring
+
+**Scheduler Choice**:
+- Development: APScheduler (in-process, simple setup)
+- Production: Documented both cron jobs and systemd timers
+- Flexibility: CLI supports both `--run-once` and `--start-scheduler` modes
+
+**Embedding Versioning**:
+- Old embeddings archived in `embedding_archives` table
+- New embeddings replace old ones in both SQLite and ChromaDB
+- Archive preserves model version and timestamp for forensics
+
+### Results
+
+- **Database Migration**: Renamed `chroma_db/` → `database/` for centralized storage
+- **Schema Version 2**: Enhanced with source tracking and review metadata
+- **14 New Tests**: Comprehensive coverage of dual storage, drift detection, and archiving
+- **Production Ready**: Cron job + systemd timer documentation
+- **Type Safe**: Strict type hints pass mypy checks
+- **Zero Breaking Changes**: Existing LLM storage tests still pass (23/23)
+
+### Test Coverage
+
+**Added Test File**:
+- `test_drift_detection.py` - 14 test methods covering:
+  - Schema validation (source, archive_version, review metadata, chroma_id)
+  - Dual storage integration (SQLite + ChromaDB insert, similarity search)
+  - Drift detection (low-confidence sampling, old record sampling, agreement calculation)
+  - Drift thresholds (warning/critical alerts)
+  - Archiving (embedding versioning, model statistics)
+  - Deduplication (text hash-based duplicate detection)
+
+### Operational Guide
+
+**Starting Drift Detection**:
+```bash
+# Option 1: In-process scheduler (development)
+python -m sigmak.drift_scheduler --start-scheduler --interval-hours 24
+
+# Option 2: Cron job (production)
+# Add to crontab: 0 2 * * * cd /app && python -m sigmak.drift_scheduler --run-once
+```
+
+**Monitoring**:
+```python
+from sigmak.drift_detection import DriftDetectionSystem
+
+system = DriftDetectionSystem()
+metrics = system.get_recent_drift_metrics(limit=10)
+print(f"Latest agreement rate: {metrics[0]['agreement_rate']:.1%}")
+```
+
+**Embedding Model Migration**:
+```python
+# Archive old embeddings before upgrading model
+system.archive_and_update_embedding(
+    record_id=123,
+    new_embedding=new_vector,
+    new_model_version="all-MiniLM-L12-v2"
+)
+```
+
+### Files Modified
+- `pyproject.toml` - Added `apscheduler>=3.10.0` dependency
+- `README.md` - Added comprehensive drift detection documentation section
+- `.gitignore`, `.dockerignore` - Updated for `database/` directory
+- `init_vector_db.py`, `config.py`, `indexing_pipeline.py`, `integration.py` - Updated default paths
+- `Dockerfile` - Updated mkdir command for database directory
+
+### Dependencies Added
+- **apscheduler**: 3.10.0+ (in-process job scheduling)
+
+---
+
 ## [2025-01-11] Gemini LLM Integration for Risk Classification (COMPLETED)
 
 ### Status: COMPLETED ✓
