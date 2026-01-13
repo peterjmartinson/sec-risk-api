@@ -255,3 +255,7 @@ output/
 llm_cache.db
 api_keys.json
 *Zone.Identifier
+
+# Keep the package `src/sigmak/downloads/` tracked (negate global downloads/ ignore)
+!src/sigmak/downloads/
+!src/sigmak/downloads/**
