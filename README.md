@@ -100,6 +100,94 @@ Initialize the vector database infrastructure:
 uv run init_vector_db.py
 ```
 
+### Downloading 10-K Filings
+
+The 10-K downloader retrieves filings directly from SEC EDGAR and tracks them in SQLite:
+
+```bash
+# Download most recent 3 years of 10-K filings for Microsoft
+uv run python -m sigmak.downloads.tenk_downloader --ticker MSFT
+
+# Download specific number of years
+uv run python -m sigmak.downloads.tenk_downloader --ticker AAPL --years 5
+
+# Custom download directory and database path
+uv run python -m sigmak.downloads.tenk_downloader \
+    --ticker TSLA \
+    --years 2 \
+    --download-dir ./my_filings \
+    --db-path ./database/custom.db
+
+# Force re-download of existing files
+uv run python -m sigmak.downloads.tenk_downloader --ticker MSFT --force-refresh
+
+# Verbose logging for debugging
+uv run python -m sigmak.downloads.tenk_downloader --ticker AAPL --verbose
+```
+
+**Features**:
+- **Automatic Ticker → CIK Resolution**: Resolves ticker symbols to SEC Central Index Keys using SEC's company tickers JSON
+- **Intelligent Retry Logic**: Exponential backoff on transient errors (429 rate limiting, 503 service unavailable)
+- **Dual SQLite Tracking**: 
+  - `filings_index` table: Stores filing metadata (CIK, accession number, filing date, SEC URL)
+  - `downloads` table: Tracks downloaded files with SHA-256 checksums for integrity verification
+- **Idempotent Downloads**: Skips re-downloading existing files unless `--force-refresh` is used
+- **SEC Compliance**: Proper User-Agent header, respects rate limits, follows SEC EDGAR best practices
+
+**Database Schema**:
+```sql
+-- Filing metadata (one row per unique SEC filing)
+CREATE TABLE filings_index (
+    id TEXT PRIMARY KEY,              -- UUID
+    ticker TEXT NOT NULL,
+    cik TEXT NOT NULL,
+    accession TEXT NOT NULL,
+    filing_type TEXT NOT NULL,
+    filing_date TEXT,
+    sec_url TEXT,
+    discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(cik, accession)            -- Prevent duplicate filings
+);
+
+-- Downloaded files (one row per downloaded file)
+CREATE TABLE downloads (
+    id TEXT PRIMARY KEY,              -- UUID
+    filing_index_id TEXT NOT NULL,    -- Foreign key to filings_index
+    local_path TEXT NOT NULL,
+    download_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    http_status INTEGER,
+    bytes INTEGER,
+    checksum TEXT,                    -- SHA-256 for integrity
+    FOREIGN KEY (filing_index_id) REFERENCES filings_index(id),
+    UNIQUE(filing_index_id, local_path)
+);
+```
+
+**Default Paths**:
+- **Database**: `./database/sec_filings.db`
+- **Downloads**: `./data/filings/{ticker}/{year}/` (e.g., `data/filings/MSFT/2024/msft-20241231x10k.htm`)
+
+**Programmatic Usage**:
+```python
+from sigmak.downloads import TenKDownloader
+
+# Initialize downloader
+downloader = TenKDownloader(
+    db_path="./database/sec_filings.db",
+    download_dir="./data/filings"
+)
+
+# Download filings
+records = downloader.download_10k(ticker="MSFT", years=3)
+
+# Inspect results
+for record in records:
+    print(f"Downloaded: {record.ticker} {record.year}")
+    print(f"  Path: {record.local_path}")
+    print(f"  SHA-256: {record.checksum}")
+    print(f"  Status: {record.http_status}")
+```
+
 ### Quick Start: Analyze a Filing
 
 The fastest way to analyze a SEC filing is with the CLI utility:

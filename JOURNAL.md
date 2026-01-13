@@ -1,3 +1,172 @@
+## [2026-01-12] SEC 10-K Downloader with SQLite Tracking (COMPLETED)
+
+### Status: COMPLETED ✓
+
+### Problem
+Manual 10-K filing downloads are tedious and error-prone:
+- Navigating SEC EDGAR is cumbersome for bulk downloads
+- No tracking of which filings have been downloaded
+- No ticker → CIK resolution (must manually look up)
+- No retry logic for transient SEC API failures
+- No checksums for file integrity verification
+- No provenance tracking (accession numbers, filing dates)
+
+### Solution Implemented
+
+**Built production-grade 10-K downloader** with SQLite tracking, SEC EDGAR integration, and comprehensive retry logic following TDD principles.
+
+**Implementation Components**:
+
+1. **`src/sigmak/downloads/tenk_downloader.py`** (750+ lines):
+   - `FilingsDatabase`: SQLite operations with dual-table schema
+     * `filings_index`: Filing metadata (CIK, accession, filing date, SEC URL)
+     * `downloads`: Downloaded files with SHA-256 checksums
+   - `TenKDownloader`: Main orchestrator class
+     * `download_10k(ticker, years=3)`: Download most recent N years of 10-K filings
+     * `download_filing(filing, filing_id)`: Single file download with checksum verification
+   - `resolve_ticker_to_cik(ticker)`: Cached SEC ticker list lookup
+   - `fetch_company_submissions(cik, form_type="10-K")`: SEC JSON API parser with retry
+   - `_create_session_with_retry()`: urllib3 retry adapter with exponential backoff
+   - CLI interface with argparse for command-line usage
+
+2. **`tests/test_tenk_downloader.py`** (570+ lines, TDD approach):
+   - 13 comprehensive test cases covering:
+     * Ticker → CIK resolution (case-insensitive, unknown ticker errors)
+     * SEC API fetcher (JSON parsing, form type filtering)
+     * SQLite database (schema creation, UNIQUE constraints, foreign keys)
+     * File download (HTM retrieval, checksum calculation, download records)
+     * CLI interface (default years parameter)
+     * Retry logic (urllib3 adapter configuration, transient error handling)
+     * End-to-end integration (full download workflow)
+
+3. **Database Schema**:
+```sql
+-- Filing metadata (one row per unique SEC filing)
+CREATE TABLE filings_index (
+    id TEXT PRIMARY KEY,              -- UUID
+    ticker TEXT NOT NULL,
+    cik TEXT NOT NULL,
+    accession TEXT NOT NULL,
+    filing_type TEXT NOT NULL,
+    filing_date TEXT,
+    sec_url TEXT,
+    source TEXT,                      -- "sec_api" or "manual"
+    discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    raw_metadata TEXT,                -- JSON blob
+    UNIQUE(cik, accession)            -- Prevent duplicates
+);
+
+-- Downloaded files (one row per downloaded file)
+CREATE TABLE downloads (
+    id TEXT PRIMARY KEY,              -- UUID
+    filing_index_id TEXT NOT NULL,    -- Foreign key
+    ticker TEXT,
+    year INTEGER,
+    local_path TEXT NOT NULL,
+    filename TEXT,
+    download_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    http_status INTEGER,
+    bytes INTEGER,
+    checksum TEXT,                    -- SHA-256
+    notes TEXT,
+    FOREIGN KEY (filing_index_id) REFERENCES filings_index(id),
+    UNIQUE(filing_index_id, local_path)
+);
+```
+
+### Key Technical Decisions
+
+**SEC EDGAR API Integration**:
+- `/files/company_tickers.json` for ticker → CIK mapping (cached)
+- `/submissions/CIK{cik}.json` for filing metadata
+- Proper User-Agent: `"SigmaK Risk Analysis Tool/1.0 (distracted.fortune@protonmail.com)"`
+- Respects SEC rate limits with exponential backoff
+
+**Retry Strategy**:
+- `urllib3.Retry` with `BACKOFF_FACTOR=2`, `MAX_RETRIES=3`
+- Status codes: 429 (rate limit), 500, 502, 503, 504 (transient errors)
+- Exponential backoff: 1s, 2s, 4s between retries
+
+**Idempotent Design**:
+- `UNIQUE(cik, accession)` constraint prevents duplicate filing records
+- `UNIQUE(filing_index_id, local_path)` prevents duplicate downloads
+- Skips re-downloading existing files unless `--force-refresh` flag
+
+**File Integrity**:
+- SHA-256 checksum calculated for every download
+- Stored in `downloads.checksum` for verification
+- Can detect corrupted downloads by recomputing hash
+
+**CLI Interface**:
+```bash
+python -m sigmak.downloads.tenk_downloader --ticker MSFT --years 3
+```
+- `--ticker`: Stock ticker (required)
+- `--years`: Number of recent years (default: 3)
+- `--download-dir`: Download directory (default: `./data/filings`)
+- `--db-path`: SQLite database path (default: `./database/sec_filings.db`)
+- `--force-refresh`: Re-download existing files
+- `--verbose`: Enable debug logging
+
+### Test Results
+
+All 13 tests passing with comprehensive coverage:
+
+```
+test_resolve_ticker_to_cik_returns_expected_cik ........................ PASSED
+test_resolve_ticker_case_insensitive .................................... PASSED
+test_resolve_unknown_ticker_raises_error ................................ PASSED
+test_fetch_company_submissions_parses_accession_and_sec_url ............. PASSED
+test_fetch_company_submissions_filters_by_form_type ..................... PASSED
+test_filing_index_inserts_and_enforces_unique ........................... PASSED
+test_database_creates_required_tables ................................... PASSED
+test_database_enforces_foreign_key_constraint ........................... PASSED
+test_download_10k_downloads_file_and_records_in_downloads_table ......... PASSED
+test_cli_default_years_is_three ......................................... PASSED
+test_rate_limiting_and_retry_on_transient_errors ........................ PASSED
+test_retry_exhaustion_raises_error ...................................... PASSED
+test_download_10k_end_to_end ............................................ PASSED
+```
+
+### Type Safety
+
+Full `mypy` compliance:
+- All public functions have strict type annotations
+- Dataclasses for structured data (`FilingRecord`, `DownloadRecord`)
+- Type hints for SQLite cursor results
+- Generic types for lists and dictionaries
+
+### Files Added
+
+- `src/sigmak/downloads/tenk_downloader.py` - Main implementation
+- `src/sigmak/downloads/__init__.py` - Package exports
+- `tests/test_tenk_downloader.py` - TDD test suite
+
+### Documentation Updated
+
+- **README.md**: Added "Downloading 10-K Filings" section with CLI examples, database schema, programmatic usage
+- **JOURNAL.md**: This entry
+
+### What This Enables
+
+1. **Automated Bulk Downloads**: Download years of filings for multiple tickers
+2. **Full Provenance**: Track every filing with accession numbers, filing dates, SEC URLs
+3. **Reliable Downloads**: Exponential backoff handles transient SEC API failures
+4. **File Integrity**: SHA-256 checksums verify download correctness
+5. **Incremental Updates**: Only download new filings, skip existing ones
+6. **Audit Trail**: SQLite database enables queries like "when did we download MSFT 2022 10-K?"
+
+### Next Steps
+
+Future enhancements (not required for current milestone):
+- [ ] Support for 10-Q filings
+- [ ] Parallel downloads for multiple tickers
+- [ ] Automatic HTML → Item 1A extraction pipeline integration
+- [ ] SEC rate limit monitoring dashboard
+- [ ] Automatic filing discovery (scan for new filings daily)
+
+---
+
 ## [2026-01-12] Drift Detection System with Dual Storage (COMPLETED)
 
 ### Status: COMPLETED ✓

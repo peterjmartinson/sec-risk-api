@@ -414,5 +414,29 @@
   "vy4jRvar0JCixXaNnYfkwWYBmngOG_u_TEL6nt7MTkY": {
     "user": "user",
     "rate_limit": 20
+  },
+  "TnGpKOJhOXZdERffTPM6G90y2PjLuwrlin9GxFTkB6I": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "T2PPP36X9JO3KwZfLQF7qhpMXI3NWYaIwax_05KZtW0": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "3eCUcXDIZPX2qQE8_MP2MbWxdrX8cCrtDOqzRWYEV48": {
+    "user": "test_user",
+    "rate_limit": 10
+  },
+  "ZKa78mP1Sl2WHbhdyo6j9rXTcqsEqCbDbg9kgnLShzA": {
+    "user": "basic_user",
+    "rate_limit": 5
+  },
+  "pMp5DX0yGy6UA4zis4gJwxtEAJKQDxkHGdHBeXGMwpU": {
+    "user": "premium_user",
+    "rate_limit": 50
+  },
+  "T37iwb_sf_R_PymJDf7_i17q0ZcnCK0UQHaKR7kaFCY": {
+    "user": "user",
+    "rate_limit": 20
   }
 }
