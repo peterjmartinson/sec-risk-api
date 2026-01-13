@@ -25,7 +25,7 @@ class Config:
     redis_url: str = field(default_factory=lambda: os.getenv('REDIS_URL', 'redis://localhost:6379/0'))
     log_level: str = field(default_factory=lambda: os.getenv('LOG_LEVEL', 'INFO'))
     environment: str = field(default_factory=lambda: os.getenv('ENVIRONMENT', 'development'))
-    chroma_persist_path: str = field(default_factory=lambda: os.getenv('CHROMA_PERSIST_PATH', './chroma_db'))
+    chroma_persist_path: str = field(default_factory=lambda: os.getenv('CHROMA_PERSIST_PATH', './database'))
     
     def __post_init__(self) -> None:
         """Validate configuration."""

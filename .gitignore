@@ -210,7 +210,7 @@ __marimo__/
 .*.sw*
 .sw*
 docs/*
-chroma_db/*
+database/*
 
 # Downloaded SEC filings (keep data/samples/ tracked for tests)
 data/filings/

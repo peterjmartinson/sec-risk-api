@@ -51,7 +51,7 @@ COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser pyproject.toml .
 
 # Create directories for data and logs
-RUN mkdir -p /app/chroma_db /app/logs && \
+RUN mkdir -p /app/database /app/logs && \
     chown -R appuser:appuser /app
 
 # Switch to non-root user

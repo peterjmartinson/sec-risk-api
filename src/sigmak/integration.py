@@ -137,7 +137,7 @@ class IntegrationPipeline:
     
     def __init__(
         self,
-        persist_path: str = "./chroma_db",
+        persist_path: str = "./database",
         use_llm: bool = False
     ) -> None:
         """
