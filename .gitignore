@@ -1,4 +1,35 @@
-# Byte-compiled / optimized / DLL files
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editor directories
+.vscode/
+.idea/
+
+# Build / packaging
+dist/
+build/
+*.egg-info/
+
+# Chroma/vector DB persistence
+chroma_db/
+
+# Local databases and binary indexes
+database/
+*.sqlite3
+
+# SQL session dumps
+SEC Filings.session.sql
+
+# Temporary files
+*.swp
+*.tmp# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
 *$py.class
