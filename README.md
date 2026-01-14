@@ -134,6 +134,9 @@ uv run python -m sigmak.downloads.tenk_downloader --ticker AAPL --verbose
 - **Idempotent Downloads**: Skips re-downloading existing files unless `--force-refresh` is used
 - **SEC Compliance**: Proper User-Agent header, respects rate limits, follows SEC EDGAR best practices
 
+**YoY Report Integration**:
+- The Year-over-Year (YoY) report now sources filing identifiers (accession, CIK, SEC URL) from the local `filings_index` SQLite database when available. If identifiers are missing in the database, the report falls back to legacy JSON metadata search and inserts a reconciliation entry into `output/missing_identifiers.csv` using the token `MISSING_IDENTIFIERS`.
+
 **Database Schema**:
 ```sql
 -- Filing metadata (one row per unique SEC filing)

@@ -165,6 +165,23 @@ Future enhancements (not required for current milestone):
 - [ ] SEC rate limit monitoring dashboard
 - [ ] Automatic filing discovery (scan for new filings daily)
 
+
+## [2026-01-13] YOY Report: Include Filing Identifiers from SQLite (COMPLETED)
+
+### Status: COMPLETED ✓
+
+### Summary
+The YoY (Year-over-Year) markdown report generator was updated to fetch filing identifiers (accession, CIK, SEC URL) from the local `filings_index` SQLite database when available. When multiple filings exist for a ticker and year, the row with the latest `filing_date` is selected deterministically. Records missing identifiers are flagged using the token `MISSING_IDENTIFIERS` and appended to `output/missing_identifiers.csv` for reconciliation.
+
+### Files Changed
+- `src/sigmak/filings_db.py` — new lightweight SQLite helper for `filings_index` access
+- `scripts/generate_yoy_report.py` — now consults the SQLite helper and preserves legacy JSON fallback
+- `tests/test_filings_db_and_report.py` — unit tests added (selection, fallback logging, and report rendering)
+- `README.md` — documentation of YoY data source & fallback policy
+
+### Rationale
+Centralizing provenance lookups in SQLite improves accuracy of report links and identifiers, supports deterministic selection for duplicates, and produces an auditable reconciliation file when data is missing.
+
 ---
 
 ## [2026-01-12] Drift Detection System with Dual Storage (COMPLETED)

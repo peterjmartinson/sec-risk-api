@@ -23,24 +23,27 @@ import sys
 import argparse
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, TYPE_CHECKING
 import json
 from collections import defaultdict
 from dotenv import load_dotenv
-from sigmak.integration import IntegrationPipeline, RiskAnalysisResult
+from sigmak import filings_db
+
+if TYPE_CHECKING:
+    from sigmak.integration import RiskAnalysisResult
 
 # Load environment variables from .env file
 load_dotenv()
 
 
 def load_or_analyze_filing(
-    pipeline: IntegrationPipeline,
+    pipeline,
     html_path: str,
     ticker: str,
     year: int,
     retrieve_top_k: int = 10,
     use_llm: bool = False
-) -> RiskAnalysisResult:
+) -> "RiskAnalysisResult":
     """
     Load cached results or analyze filing fresh.
     
@@ -55,6 +58,9 @@ def load_or_analyze_filing(
     Returns:
         RiskAnalysisResult with full risk analysis
     """
+    # Import here to avoid heavy imports at module load-time during tests
+    from sigmak.integration import IntegrationPipeline, RiskAnalysisResult
+
     cache_file = Path(f"output/results_{ticker}_{year}.json")
     
     # Skip cache when LLM is enabled to ensure fresh enrichment
@@ -111,7 +117,7 @@ def calculate_risk_similarity(risk1_text: str, risk2_text: str) -> float:
 
 
 def identify_risk_changes(
-    results: List[RiskAnalysisResult],
+    results: List["RiskAnalysisResult"],
     similarity_threshold: float = 0.4
 ) -> Dict[str, Any]:
     """
@@ -187,7 +193,7 @@ def identify_risk_changes(
     return changes
 
 
-def calculate_category_distribution(result: RiskAnalysisResult) -> Dict[str, List[Dict[str, Any]]]:
+def calculate_category_distribution(result: "RiskAnalysisResult") -> Dict[str, List[Dict[str, Any]]]:
     """
     Calculate distribution of risk categories with associated risks.
     
@@ -279,7 +285,7 @@ def suggest_categories_from_keywords(risk_text: str) -> Tuple[List[str], List[st
     return detected_keywords[:3], suggested_categories  # Return max 3 keywords
 
 
-def load_filing_provenance(ticker: str, filing_year: int) -> Dict[str, str]:
+def load_filing_provenance(ticker: str, filing_year: int, filings_db_path: str | None = None) -> Dict[str, str]:
     """
     Load filing provenance metadata from JSON file if available.
     
@@ -290,21 +296,28 @@ def load_filing_provenance(ticker: str, filing_year: int) -> Dict[str, str]:
     Returns:
         Dictionary with accession, cik, and sec_url (or placeholders)
     """
-    # Try to find metadata JSON file (check filings/, data/, and samples/)
+    # First, attempt to load identifiers from the filings_index SQLite DB
+    db_result = filings_db.get_identifiers(filings_db_path, ticker, filing_year)
+
+    # If DB provided values (not missing token), return them
+    if db_result and all(v != filings_db.MISSING_TOKEN for v in db_result.values()):
+        return db_result
+
+    # Otherwise, try the legacy JSON search as a fallback
     search_dirs = [Path("data/filings"), Path("data"), Path("data/samples")]
-    
+
     # Common filename patterns
     patterns = [
         f"{ticker.lower()}-{filing_year}*.json",
         f"{ticker.upper()}-{filing_year}*.json",
     ]
-    
+
     metadata = {
-        'accession': '<ACCESSION>',
-        'cik': '<CIK>',
-        'sec_url': '<SEC_URL>'
+        'accession': db_result.get('accession', filings_db.MISSING_TOKEN),
+        'cik': db_result.get('cik', filings_db.MISSING_TOKEN),
+        'sec_url': db_result.get('sec_url', filings_db.MISSING_TOKEN)
     }
-    
+
     # Look for JSON files matching the patterns in all search directories
     for data_dir in search_dirs:
         if not data_dir.exists():
@@ -315,20 +328,21 @@ def load_filing_provenance(ticker: str, filing_year: int) -> Dict[str, str]:
                 try:
                     with open(matches[0], 'r') as f:
                         data = json.load(f)
-                        metadata['accession'] = data.get('accession', '<ACCESSION>')
-                        metadata['cik'] = data.get('cik', '<CIK>')
-                        metadata['sec_url'] = data.get('sec_url', '<SEC_URL>')
+                        metadata['accession'] = data.get('accession', metadata['accession'])
+                        metadata['cik'] = data.get('cik', metadata['cik'])
+                        metadata['sec_url'] = data.get('sec_url', metadata['sec_url'])
                         return metadata  # Return immediately on first match
                 except (json.JSONDecodeError, IOError):
                     pass
-    
+
     return metadata
 
 
 def generate_markdown_report(
     ticker: str,
-    results: List[RiskAnalysisResult],
-    output_file: str = "risk_analysis_report.md"
+    results: List["RiskAnalysisResult"],
+    output_file: str = "risk_analysis_report.md",
+    filings_db_path: str | None = None,
 ) -> None:
     """
     Generate investment-grade markdown report focusing on latest year's risks.
@@ -354,7 +368,7 @@ def generate_markdown_report(
     report_lines.append(f"**Report Date:** {datetime.now().strftime('%B %d, %Y')}")
     
     # Add provenance metadata
-    provenance = load_filing_provenance(ticker, latest_year)
+    provenance = load_filing_provenance(ticker, latest_year, filings_db_path)
     sec_url = provenance['sec_url']
     if not sec_url.startswith('http') and sec_url != '<SEC_URL>':
         sec_url = f"https://www.sec.gov{sec_url if sec_url.startswith('/') else '/' + sec_url}"
@@ -515,7 +529,7 @@ def generate_markdown_report(
     report_lines.append("")
     
     # Load provenance for evidence links
-    provenance = load_filing_provenance(ticker, latest_year)
+    provenance = load_filing_provenance(ticker, latest_year, filings_db_path)
     base_sec_url = provenance['sec_url']
     if base_sec_url == '<SEC_URL>':
         base_sec_url = f"https://www.sec.gov/Archives/edgar/data/{provenance['cik']}/{provenance['accession'].replace('-', '')}/{provenance['accession']}.htm"
