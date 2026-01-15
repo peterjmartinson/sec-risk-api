@@ -81,7 +81,7 @@ The system uses a proprietary 10-category classification for SEC risk factors:
 
 ### Prerequisites
 
-* Python 3.10+
+* Python 3.11+
 * `uv` for dependency management (preferred)
 * WSL2 (for persistence on Windows)
 

@@ -1,6 +1,6 @@
 # Multi-stage build for SEC Risk API (Issue #4.3)
 # Stage 1: Build stage with all dependencies
-FROM python:3.10-slim AS builder
+FROM python:3.11-slim AS builder
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -25,7 +25,7 @@ RUN pip install --upgrade pip && \
     pip install -e .
 
 # Stage 2: Runtime stage
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \

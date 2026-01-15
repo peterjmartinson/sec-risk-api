@@ -111,8 +111,8 @@ class TestGeminiClassifier:
             classifier = GeminiClassifier(model_name="gemini-pro")
             assert classifier.model_name == "gemini-pro"
     
-    @patch('sigmak.llm_classifier.genai')
-    def test_classify_success(self, mock_genai: Mock) -> None:
+    @patch('sigmak.llm_classifier.genai.Client')
+    def test_classify_success(self, mock_client_class: Mock) -> None:
         """Test successful classification with valid LLM response."""
         # Mock the Gemini API response
         mock_response = Mock()
@@ -129,9 +129,10 @@ class TestGeminiClassifier:
             candidates_token_count=50
         )
         
-        mock_model = Mock()
-        mock_model.generate_content.return_value = mock_response
-        mock_genai.GenerativeModel.return_value = mock_model
+        # Mock the client and models API
+        mock_client = Mock()
+        mock_client.models.generate_content.return_value = mock_response
+        mock_client_class.return_value = mock_client
         
         with patch.dict('os.environ', {'GOOGLE_API_KEY': 'test-key'}):
             classifier = GeminiClassifier()
@@ -147,15 +148,15 @@ class TestGeminiClassifier:
             assert result.input_tokens == 100
             assert result.output_tokens == 50
     
-    @patch('sigmak.llm_classifier.genai')
-    def test_classify_invalid_json(self, mock_genai: Mock) -> None:
+    @patch('sigmak.llm_classifier.genai.Client')
+    def test_classify_invalid_json(self, mock_client_class: Mock) -> None:
         """Test handling of invalid JSON in LLM response."""
         mock_response = Mock()
         mock_response.text = "This is not valid JSON"
         
-        mock_model = Mock()
-        mock_model.generate_content.return_value = mock_response
-        mock_genai.GenerativeModel.return_value = mock_model
+        mock_client = Mock()
+        mock_client.models.generate_content.return_value = mock_response
+        mock_client_class.return_value = mock_client
         
         with patch.dict('os.environ', {'GOOGLE_API_KEY': 'test-key'}):
             classifier = GeminiClassifier()
@@ -163,8 +164,8 @@ class TestGeminiClassifier:
             with pytest.raises(LLMClassificationError, match="Failed to parse"):
                 classifier.classify(text="Some risk text")
     
-    @patch('sigmak.llm_classifier.genai')
-    def test_classify_invalid_category(self, mock_genai: Mock) -> None:
+    @patch('sigmak.llm_classifier.genai.Client')
+    def test_classify_invalid_category(self, mock_client_class: Mock) -> None:
         """Test handling of invalid category in LLM response."""
         mock_response = Mock()
         mock_response.text = """
@@ -176,9 +177,9 @@ class TestGeminiClassifier:
         }
         """
         
-        mock_model = Mock()
-        mock_model.generate_content.return_value = mock_response
-        mock_genai.GenerativeModel.return_value = mock_model
+        mock_client = Mock()
+        mock_client.models.generate_content.return_value = mock_response
+        mock_client_class.return_value = mock_client
         
         with patch.dict('os.environ', {'GOOGLE_API_KEY': 'test-key'}):
             classifier = GeminiClassifier()
@@ -186,8 +187,8 @@ class TestGeminiClassifier:
             with pytest.raises(LLMClassificationError, match="Invalid category"):
                 classifier.classify(text="Some risk text")
     
-    @patch('sigmak.llm_classifier.genai')
-    def test_classify_missing_required_field(self, mock_genai: Mock) -> None:
+    @patch('sigmak.llm_classifier.genai.Client')
+    def test_classify_missing_required_field(self, mock_client_class: Mock) -> None:
         """Test handling of missing required fields in LLM response."""
         mock_response = Mock()
         mock_response.text = """
@@ -197,9 +198,9 @@ class TestGeminiClassifier:
         }
         """
         
-        mock_model = Mock()
-        mock_model.generate_content.return_value = mock_response
-        mock_genai.GenerativeModel.return_value = mock_model
+        mock_client = Mock()
+        mock_client.models.generate_content.return_value = mock_response
+        mock_client_class.return_value = mock_client
         
         with patch.dict('os.environ', {'GOOGLE_API_KEY': 'test-key'}):
             classifier = GeminiClassifier()
@@ -207,13 +208,10 @@ class TestGeminiClassifier:
             with pytest.raises(LLMClassificationError, match="Missing required field"):
                 classifier.classify(text="Some risk text")
     
-    @patch('sigmak.llm_classifier.genai')
-    def test_classify_retry_on_rate_limit(self, mock_genai: Mock) -> None:
+    @patch('sigmak.llm_classifier.genai.Client')
+    def test_classify_retry_on_rate_limit(self, mock_client_class: Mock) -> None:
         """Test retry logic when rate limit is hit."""
         # First call fails with rate limit, second succeeds
-        mock_response_fail = Mock()
-        mock_response_fail.prompt_feedback.block_reason = "RATE_LIMIT"
-        
         mock_response_success = Mock()
         mock_response_success.text = """
         {
@@ -228,12 +226,12 @@ class TestGeminiClassifier:
             candidates_token_count=50
         )
         
-        mock_model = Mock()
-        mock_model.generate_content.side_effect = [
+        mock_client = Mock()
+        mock_client.models.generate_content.side_effect = [
             Exception("429 Resource exhausted"),
             mock_response_success
         ]
-        mock_genai.GenerativeModel.return_value = mock_model
+        mock_client_class.return_value = mock_client
         
         with patch.dict('os.environ', {'GOOGLE_API_KEY': 'test-key'}):
             classifier = GeminiClassifier(max_retries=3, retry_delay=0.1)
@@ -241,14 +239,14 @@ class TestGeminiClassifier:
             result = classifier.classify(text="Some risk text")
             assert result.category == RiskCategory.OPERATIONAL
             # Verify it was called twice (1 failure + 1 success)
-            assert mock_model.generate_content.call_count == 2
+            assert mock_client.models.generate_content.call_count == 2
     
-    @patch('sigmak.llm_classifier.genai')
-    def test_classify_max_retries_exceeded(self, mock_genai: Mock) -> None:
+    @patch('sigmak.llm_classifier.genai.Client')
+    def test_classify_max_retries_exceeded(self, mock_client_class: Mock) -> None:
         """Test that classification fails after max retries."""
-        mock_model = Mock()
-        mock_model.generate_content.side_effect = Exception("429 Resource exhausted")
-        mock_genai.GenerativeModel.return_value = mock_model
+        mock_client = Mock()
+        mock_client.models.generate_content.side_effect = Exception("429 Resource exhausted")
+        mock_client_class.return_value = mock_client
         
         with patch.dict('os.environ', {'GOOGLE_API_KEY': 'test-key'}):
             classifier = GeminiClassifier(max_retries=2, retry_delay=0.1)
@@ -267,8 +265,8 @@ class TestGeminiClassifier:
             with pytest.raises(ValueError, match="empty"):
                 classifier.classify(text="   ")
     
-    @patch('sigmak.llm_classifier.genai')
-    def test_prompt_includes_taxonomy(self, mock_genai: Mock) -> None:
+    @patch('sigmak.llm_classifier.genai.Client')
+    def test_prompt_includes_taxonomy(self, mock_client_class: Mock) -> None:
         """Test that the prompt includes risk taxonomy information."""
         mock_response = Mock()
         mock_response.text = """
@@ -284,17 +282,18 @@ class TestGeminiClassifier:
             candidates_token_count=50
         )
         
-        mock_model = Mock()
-        mock_model.generate_content.return_value = mock_response
-        mock_genai.GenerativeModel.return_value = mock_model
+        mock_client = Mock()
+        mock_client.models.generate_content.return_value = mock_response
+        mock_client_class.return_value = mock_client
         
         with patch.dict('os.environ', {'GOOGLE_API_KEY': 'test-key'}):
             classifier = GeminiClassifier()
             classifier.classify(text="Some risk text")
             
             # Check the prompt passed to generate_content
-            call_args = mock_model.generate_content.call_args
-            prompt = call_args[0][0]
+            call_args = mock_client.models.generate_content.call_args
+            # Call was: client.models.generate_content(model=..., contents=...)
+            prompt = call_args.kwargs.get('contents') or call_args[1].get('contents')
             
             # Verify prompt includes key taxonomy categories
             assert "OPERATIONAL" in prompt

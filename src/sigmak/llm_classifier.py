@@ -23,7 +23,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, Any
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from sigmak.prompt_manager import PromptManager
 from sigmak.risk_taxonomy import RiskCategory, validate_category
@@ -141,8 +142,8 @@ class GeminiClassifier:
                 "or pass api_key parameter."
             )
         
-        # Configure Gemini API
-        genai.configure(api_key=self.api_key)
+        # Initialize Gemini client
+        self.client = genai.Client(api_key=self.api_key)
         
         # Load prompt template
         self.prompt_manager = PromptManager()
@@ -205,11 +206,12 @@ class GeminiClassifier:
             GeminiRateLimitError: If rate limit exceeded after max retries
             GeminiAPIError: If API returns non-retryable error
         """
-        model = genai.GenerativeModel(self.model_name)
-        
         for attempt in range(self.max_retries):
             try:
-                response = model.generate_content(prompt)
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt
+                )
                 return response
             
             except Exception as e:
@@ -300,7 +302,7 @@ class GeminiClassifier:
         # Extract token usage
         input_tokens = 0
         output_tokens = 0
-        if hasattr(response, 'usage_metadata'):
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
             input_tokens = getattr(response.usage_metadata, 'prompt_token_count', 0)
             output_tokens = getattr(response.usage_metadata, 'candidates_token_count', 0)
         

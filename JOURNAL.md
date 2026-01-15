@@ -1,3 +1,96 @@
+## [2026-01-15] Google Gemini API Migration: google-genai Package (COMPLETED)
+
+### Status: COMPLETED ✓
+
+### Problem
+Deprecation warnings on every script execution:
+- `google.generativeai` package has reached end-of-life (no more updates or bug fixes)
+- Python 3.10 approaching EOL (2026-10-04)
+- FutureWarning messages cluttering console output
+- Need to migrate to supported API before deprecation causes breakage
+
+### Solution Implemented
+
+**Migrated to `google-genai` package and Python 3.11** following systemic upgrade approach:
+
+**Implementation Components**:
+
+1. **API Migration (`src/sigmak/llm_classifier.py`)**:
+   - Replaced `import google.generativeai as genai` → `from google import genai`
+   - Updated initialization: `genai.configure(api_key)` → `genai.Client(api_key=api_key)`
+   - Updated API calls: `genai.GenerativeModel(model).generate_content(prompt)` → `client.models.generate_content(model=model, contents=prompt)`
+   - Token usage extraction updated for new response structure
+
+2. **Dependency Updates**:
+   - `pyproject.toml`: 
+     * `requires-python = ">=3.11"` (was `>=3.10`)
+     * `google-genai>=0.2.0` (replaced `google-generativeai>=0.8.0`)
+     * `python_version = "3.11"` in mypy config
+     * Updated mypy overrides: `google.genai.*` (was `google.generativeai.*`)
+   - `Dockerfile`: Updated both builder and runtime stages to `python:3.11-slim`
+   - `.python-version`: Pinned to `3.11` (was `3.10`)
+
+3. **Test Suite Updates (`tests/test_llm_classifier.py`)**:
+   - Updated all 7 test mocks from `@patch('sigmak.llm_classifier.genai')` to `@patch('sigmak.llm_classifier.genai.Client')`
+   - Changed mock pattern from:
+     ```python
+     mock_model = Mock()
+     mock_model.generate_content.return_value = mock_response
+     mock_genai.GenerativeModel.return_value = mock_model
+     ```
+   - To:
+     ```python
+     mock_client = Mock()
+     mock_client.models.generate_content.return_value = mock_response
+     mock_client_class.return_value = mock_client
+     ```
+   - All 16 tests pass (7 were mocked tests, all now updated)
+
+4. **Environment Sync**:
+   - Removed `google-generativeai==0.8.6`
+   - Installed `google-genai==1.59.0`
+   - Rebuilt virtual environment with Python 3.11.14
+   - Full test suite: **238 tests passed** (0 failures)
+
+### Verification
+
+**Before Migration**:
+```bash
+$ uv run scripts/generate_yoy_report.py TSLA
+/home/peter/.venv/lib/python3.10/site-packages/google/api_core/_python_version_support.py:275: FutureWarning: 
+  You are using a Python version (3.10.18) which Google will stop supporting...
+/home/peter/src/sigmak/llm_classifier.py:26: FutureWarning:
+  All support for the `google.generativeai` package has ended...
+```
+
+**After Migration**:
+```bash
+$ uv run scripts/generate_yoy_report.py TSLA
+INFO:chromadb.telemetry.product.posthog:Anonymized telemetry enabled...
+INFO:sentence_transformers.SentenceTransformer:Use pytorch device_name: cpu
+✨ Report generated: /home/peter/Code/sigmak/output/TSLA_YoY_Risk_Analysis_2023_2025.md
+```
+
+**Zero warnings!** Clean console output confirms successful migration.
+
+### Impact
+
+- **Deprecation Warnings Eliminated**: No more FutureWarning messages
+- **Future-Proof**: Using actively maintained `google-genai` package
+- **Python 3.11**: Extended support timeline (until 2027-10-24)
+- **Zero Functionality Changes**: All existing features work identically
+- **Test Coverage Maintained**: 238 tests passing, including all LLM tests
+
+### Files Modified
+
+- `src/sigmak/llm_classifier.py` (imports, client initialization, API calls)
+- `pyproject.toml` (dependencies, Python version, mypy config)
+- `Dockerfile` (Python 3.11 base images)
+- `.python-version` (pinned to 3.11)
+- `tests/test_llm_classifier.py` (7 mock patterns updated)
+
+---
+
 ## [2026-01-12] SEC 10-K Downloader with SQLite Tracking (COMPLETED)
 
 ### Status: COMPLETED ✓
