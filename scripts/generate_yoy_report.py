@@ -30,6 +30,7 @@ from collections import defaultdict
 from dotenv import load_dotenv
 from sigmak import filings_db
 from sigmak.integration import IntegrationPipeline
+from sigmak.integration import RiskAnalysisResult
 
 if TYPE_CHECKING:
     from sigmak.integration import RiskAnalysisResult
