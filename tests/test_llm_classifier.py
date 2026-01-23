@@ -32,6 +32,7 @@ class TestLLMClassificationResult:
             evidence="Supply chain disruptions",
             rationale="Text discusses operational risks",
             model_version="gemini-2.5-flash",
+            prompt_version="1",
             timestamp=datetime.now(),
             response_time_ms=150.5,
             input_tokens=100,
@@ -42,6 +43,7 @@ class TestLLMClassificationResult:
         assert result.confidence == 0.95
         assert result.evidence == "Supply chain disruptions"
         assert result.model_version == "gemini-2.5-flash"
+        assert result.prompt_version == "1"
         assert result.input_tokens == 100
         assert result.output_tokens == 50
     
@@ -54,6 +56,7 @@ class TestLLMClassificationResult:
             evidence="test",
             rationale="test",
             model_version="gemini-2.5-flash",
+            prompt_version="1",
             timestamp=datetime.now(),
             response_time_ms=100.0,
             input_tokens=10,
@@ -67,6 +70,7 @@ class TestLLMClassificationResult:
             evidence="test",
             rationale="test",
             model_version="gemini-2.5-flash",
+            prompt_version="1",
             timestamp=datetime.now(),
             response_time_ms=100.0,
             input_tokens=10,
@@ -82,6 +86,7 @@ class TestLLMClassificationResult:
                 evidence="test",
                 rationale="test",
                 model_version="gemini-2.5-flash",
+                prompt_version="1",
                 timestamp=datetime.now(),
                 response_time_ms=100.0,
                 input_tokens=10,

@@ -165,6 +165,7 @@ class DriftDetectionSystem:
                     evidence TEXT NOT NULL,
                     rationale TEXT NOT NULL,
                     model_version TEXT NOT NULL,
+                    prompt_version TEXT NOT NULL,
                     embedding_model TEXT NOT NULL,
                     source TEXT NOT NULL,
                     timestamp TEXT NOT NULL,
@@ -289,9 +290,9 @@ class DriftDetectionSystem:
             cursor.execute("""
                 INSERT INTO risk_classifications (
                     text, text_hash, chroma_id, embedding_json, category, confidence,
-                    evidence, rationale, model_version, embedding_model, source,
+                    evidence, rationale, model_version, prompt_version, embedding_model, source,
                     timestamp, response_time_ms, input_tokens, output_tokens
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 text,
                 text_hash,
@@ -302,6 +303,7 @@ class DriftDetectionSystem:
                 llm_result.evidence,
                 llm_result.rationale,
                 llm_result.model_version,
+                llm_result.prompt_version,
                 self.embedding_model,
                 source.value,
                 llm_result.timestamp.isoformat(),
@@ -323,7 +325,9 @@ class DriftDetectionSystem:
                 "category": llm_result.category.value,
                 "confidence": llm_result.confidence,
                 "source": source.value,
-                "timestamp": llm_result.timestamp.isoformat()
+                "prompt_version": llm_result.prompt_version,
+                "timestamp": llm_result.timestamp.isoformat(),
+                "origin_text": text[:500]  # Store first 500 chars for provenance
             }]
         )
         

@@ -68,6 +68,7 @@ class LLMClassificationResult:
         evidence: Quoted text from source that justifies classification
         rationale: LLM's explanation for the classification
         model_version: Gemini model version used
+        prompt_version: Version/identifier of the prompt template used
         timestamp: When classification was performed
         response_time_ms: API response time in milliseconds
         input_tokens: Number of input tokens consumed
@@ -78,6 +79,7 @@ class LLMClassificationResult:
     evidence: str
     rationale: str
     model_version: str
+    prompt_version: str
     timestamp: datetime
     response_time_ms: float
     input_tokens: int
@@ -169,7 +171,8 @@ class GeminiClassifier:
         if not text or not text.strip():
             raise ValueError("Text cannot be empty")
         
-        # Load prompt template
+        # Load prompt template and get version
+        prompt_version = str(self.prompt_manager.get_latest_version("risk_classification"))
         prompt_template = self.prompt_manager.load_latest("risk_classification")
         
         # Construct full prompt
@@ -181,7 +184,7 @@ class GeminiClassifier:
         response_time_ms = (time.time() - start_time) * 1000
         
         # Parse response
-        result = self._parse_response(response, response_time_ms)
+        result = self._parse_response(response, response_time_ms, prompt_version)
         
         logger.info(
             f"LLM classification complete: category={result.category.value}, "
@@ -241,7 +244,8 @@ class GeminiClassifier:
     def _parse_response(
         self,
         response: Any,
-        response_time_ms: float
+        response_time_ms: float,
+        prompt_version: str
     ) -> LLMClassificationResult:
         """
         Parse Gemini API response into structured result.
@@ -249,6 +253,7 @@ class GeminiClassifier:
         Args:
             response: Raw Gemini API response
             response_time_ms: API response time in milliseconds
+            prompt_version: Version of prompt template used
         
         Returns:
             Structured LLMClassificationResult
@@ -313,6 +318,7 @@ class GeminiClassifier:
             evidence=data["evidence"],
             rationale=data["rationale"],
             model_version=self.model_name,
+            prompt_version=prompt_version,
             timestamp=datetime.now(),
             response_time_ms=response_time_ms,
             input_tokens=input_tokens,

@@ -100,6 +100,86 @@ Initialize the vector database infrastructure:
 uv run init_vector_db.py
 ```
 
+## Configuration
+
+SigmaK uses a YAML-based configuration system with environment variable overrides.
+
+**Config File**: `config.yaml` at repository root
+
+**Key Settings**:
+```yaml
+database:
+  sqlite_path: "database/risk_classifications.db"
+
+chroma:
+  persist_directory: "database"
+  embedding_model: "all-MiniLM-L6-v2"
+  llm_cache_similarity_threshold: 0.8  # Reuse cached LLM if similarity >= 0.8
+
+llm:
+  model: "gemini-2.0-flash-exp"
+  temperature: 0.0
+
+drift:
+  review_cron: "0 3 * * *"
+  sample_size: 100
+  low_confidence_threshold: 0.6
+  drift_threshold: 0.2
+
+logging:
+  level: "INFO"
+```
+
+**Environment Overrides**:
+- `SIGMAK_SQLITE_PATH` → database.sqlite_path
+- `SIGMAK_LLM_MODEL` → llm.model
+- `SIGMAK_EMBEDDING_MODEL` → chroma.embedding_model
+- `LOG_LEVEL` → logging.level
+- `CHROMA_PERSIST_PATH` → chroma.persist_directory
+- `REDIS_URL` → Redis connection (default: `redis://localhost:6379/0`)
+- `ENVIRONMENT` → deployment environment (default: `development`)
+
+**Programmatic Access**:
+```python
+from sigmak.config import get_settings
+
+settings = get_settings()
+print(settings.chroma.llm_cache_similarity_threshold)  # 0.8
+print(settings.database.sqlite_path)  # Path object
+```
+
+### Backfilling LLM Classifications
+
+After analyzing filings, you can backfill existing LLM classifications into the vector database for future reuse:
+
+```bash
+# Preview what would be inserted (dry run)
+uv run python scripts/backfill_llm_cache_to_chroma.py --dry-run
+
+# Write classifications to database
+uv run python scripts/backfill_llm_cache_to_chroma.py --write
+
+# Custom paths
+uv run python scripts/backfill_llm_cache_to_chroma.py --write \
+    --output-dir ./custom_output \
+    --db-path ./database/custom.db \
+    --chroma-path ./database/chroma
+```
+
+**What it does**:
+- Reads all `results_*.json` files from `output/` directory
+- Extracts LLM classification results (category, confidence, evidence, rationale, prompt_version)
+- Generates embeddings for each risk text
+- Inserts into SQLite audit table + ChromaDB collection
+- Skips duplicates automatically (based on text hash)
+- Reports statistics (files processed, entries inserted/skipped/errors)
+
+**Why backfill**:
+- Future classifications can reuse cached results via similarity search
+- Reduces LLM API calls and costs when analyzing new filings
+- Preserves full provenance (prompt_version, model_version, timestamp)
+- Enables drift detection by comparing old vs new classifications
+
 ### Downloading 10-K Filings
 
 The 10-K downloader retrieves filings directly from SEC EDGAR and tracks them in SQLite:

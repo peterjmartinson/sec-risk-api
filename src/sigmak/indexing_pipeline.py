@@ -147,7 +147,15 @@ class IndexingPipeline:
             base_metadata = {
                 "ticker": ticker,
                 "filing_year": filing_year,
-                "item_type": item_type
+                "item_type": item_type,
+                # Classification fields (empty string until LLM classifies)
+                # Note: Using "" instead of None because ChromaDB $ne filter doesn't support None
+                "category": "",
+                "confidence": 0.0,
+                "classification_source": "",
+                "classification_timestamp": "",
+                "model_version": "",
+                "prompt_version": ""
             }
             
             logger.info(f"Chunking text into semantic units...")
@@ -210,6 +218,118 @@ class IndexingPipeline:
         except Exception as e:
             logger.error(f"Failed to index {html_path}: {e}")
             raise
+
+    def update_chunk_classification(
+        self,
+        ticker: str,
+        filing_year: int,
+        chunk_index: int,
+        category: str,
+        confidence: float,
+        source: str,
+        model_version: str,
+        prompt_version: str
+    ) -> None:
+        """
+        Update an existing chunk's metadata with classification data.
+        
+        This method enriches a chunk in the unified collection with LLM classification
+        results, enabling future cache lookups without duplicate embeddings.
+        
+        Args:
+            ticker: Stock ticker symbol
+            filing_year: Filing year
+            chunk_index: Chunk index (0-based)
+            category: Risk category (e.g., "OPERATIONAL")
+            confidence: Classification confidence [0.0, 1.0]
+            source: Classification source ("llm", "vector", "manual")
+            model_version: LLM model version
+            prompt_version: Prompt version used
+        """
+        from datetime import datetime
+        
+        # Generate document ID
+        doc_id = self._generate_document_id(ticker, filing_year, chunk_index)
+        
+        # Get existing record to verify it exists
+        try:
+            result = self.collection.get(ids=[doc_id])
+            if len(result.get('ids', [])) == 0:
+                logger.error(f"Chunk not found: {doc_id}")
+                return
+        except Exception as e:
+            logger.error(f"Failed to get chunk {doc_id}: {e}")
+            return
+        
+        # Update metadata with classification
+        try:
+            self.collection.update(
+                ids=[doc_id],
+                metadatas=[{
+                    "ticker": ticker,
+                    "filing_year": filing_year,
+                    "item_type": "Item 1A",  # Default, could be parameterized
+                    "category": category,
+                    "confidence": confidence,
+                    "classification_source": source,
+                    "classification_timestamp": datetime.now().isoformat(),
+                    "model_version": model_version,
+                    "prompt_version": prompt_version
+                }]
+            )
+            logger.info(
+                f"Updated classification for {doc_id}: "
+                f"category={category}, confidence={confidence:.2f}, source={source}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to update chunk {doc_id}: {e}")
+            raise
+    
+    def get_chunk_by_doc_id(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a chunk by its document ID.
+        
+        Args:
+            doc_id: Document ID (ticker_year_index format)
+        
+        Returns:
+            Dict with 'text', 'metadata', 'embedding' or None if not found
+        """
+        try:
+            result = self.collection.get(
+                ids=[doc_id],
+                include=["documents", "metadatas", "embeddings"]
+            )
+            
+            # Check if result has IDs
+            ids = result.get('ids', [])
+            if isinstance(ids, list) and len(ids) == 0:
+                return None
+            if not isinstance(ids, list):
+                return None
+            
+            # Get embedding, handling numpy arrays
+            embedding = None
+            embeddings = result.get('embeddings', [])
+            if isinstance(embeddings, list) and len(embeddings) > 0:
+                embedding = embeddings[0]
+            
+            # Get documents and metadatas
+            documents = result.get('documents', [])
+            metadatas = result.get('metadatas', [])
+            
+            if len(documents) == 0 or len(metadatas) == 0:
+                return None
+            
+            return {
+                "id": ids[0],
+                "text": documents[0],
+                "metadata": metadatas[0],
+                "embedding": embedding
+            }
+        except Exception as e:
+            logger.error(f"Failed to get chunk {doc_id}: {e}")
+            return None
 
     def _prepare_where_clause(self, where: Dict[str, Any]) -> Dict[str, Any]:
         """

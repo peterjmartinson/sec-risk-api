@@ -1,0 +1,23 @@
+# SigmaK Configuration
+# Human-editable defaults for database, embeddings, LLM, and drift detection
+
+database:
+  sqlite_path: "database/risk_classifications.db"
+
+chroma:
+  persist_directory: "database"
+  embedding_model: "all-MiniLM-L6-v2"
+  llm_cache_similarity_threshold: 0.8
+
+llm:
+  model: "gemini-2.0-flash-exp"
+  temperature: 0.0
+
+drift:
+  review_cron: "0 3 * * *"
+  sample_size: 100
+  low_confidence_threshold: 0.6
+  drift_threshold: 0.2
+
+logging:
+  level: "INFO"

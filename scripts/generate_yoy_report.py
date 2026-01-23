@@ -30,6 +30,8 @@ from collections import defaultdict
 from dotenv import load_dotenv
 from sigmak import filings_db
 from sigmak.integration import IntegrationPipeline
+from sigmak.risk_classification_service import RiskClassificationService
+import os
 from sigmak.integration import RiskAnalysisResult
 
 if TYPE_CHECKING:
@@ -70,6 +72,22 @@ def load_or_analyze_filing(
         print(f"📂 Loading cached results for {ticker} {year}...")
         with open(cache_file, 'r') as f:
             data = json.load(f)
+            # If cached result was generated without reranking enabled,
+            # re-run analysis to ensure reranking is applied (default: rerank=True).
+            if not data.get('metadata', {}).get('rerank', True):
+                print(f"♻️ Cached results for {ticker} {year} were generated with rerank=False; re-running with rerank=True...")
+                result = pipeline.analyze_filing(
+                    html_path=html_path,
+                    ticker=ticker,
+                    filing_year=year,
+                    retrieve_top_k=retrieve_top_k,
+                    rerank=True
+                )
+                # Update cache
+                with open(cache_file, 'w') as wf:
+                    wf.write(result.to_json())
+                return result
+
             return RiskAnalysisResult(
                 ticker=data['ticker'],
                 filing_year=data['filing_year'],
@@ -83,7 +101,8 @@ def load_or_analyze_filing(
         html_path=html_path,
         ticker=ticker,
         filing_year=year,
-        retrieve_top_k=retrieve_top_k
+        retrieve_top_k=retrieve_top_k,
+        rerank=True
     )
     
     # Cache results
@@ -91,6 +110,55 @@ def load_or_analyze_filing(
         f.write(result.to_json())
     print(f"   ✅ Indexed {result.metadata['chunks_indexed']} chunks in {result.metadata['total_latency_ms']:.0f}ms")
     
+    # Enrich result with similarity-first classification (vector DB -> LLM)
+    use_full_service = False
+    classification_service = None
+    if os.getenv('GOOGLE_API_KEY'):
+        try:
+            classification_service = RiskClassificationService(drift_system=pipeline.drift_system)
+            use_full_service = True
+        except Exception:
+            use_full_service = False
+
+    for r in result.risks:
+        try:
+            if r.get('metadata', {}).get('category'):
+                r['category'] = r['metadata']['category']
+                r['category_confidence'] = r['metadata'].get('confidence', 0.0)
+                r['classification_method'] = r['metadata'].get('classification_source', 'vector')
+                continue
+
+            if use_full_service and classification_service:
+                try:
+                    llm_result, source = classification_service.classify_with_cache_first(r['text'])
+                    r['category'] = llm_result.category.value
+                    r['category_confidence'] = llm_result.confidence
+                    r['classification_method'] = source
+                except Exception:
+                    r['category'] = 'UNCATEGORIZED'
+                    r['category_confidence'] = 0.0
+                    r['classification_method'] = 'error'
+            else:
+                # Cache-only classification via DriftDetectionSystem
+                try:
+                    embedding = pipeline.indexing_pipeline.embeddings.encode([r['text']])[0].tolist()
+                    cache_results = pipeline.drift_system.similarity_search(query_embedding=embedding, n_results=1)
+                    if cache_results and cache_results[0].get('similarity_score', 0.0) >= 0.8:
+                        top = cache_results[0]
+                        r['category'] = top.get('category', 'UNCATEGORIZED')
+                        r['category_confidence'] = float(top.get('confidence', 0.0))
+                        r['classification_method'] = 'vector_db'
+                    else:
+                        r['category'] = 'UNCATEGORIZED'
+                        r['category_confidence'] = 0.0
+                        r['classification_method'] = 'db_only_no_match'
+                except Exception:
+                    r['category'] = 'UNCATEGORIZED'
+                    r['category_confidence'] = 0.0
+                    r['classification_method'] = 'error'
+        except Exception:
+            continue
+
     return result
 
 
@@ -816,6 +884,17 @@ Examples:
         action='store_true',
         help='Enable LLM-based risk classification (increases latency and cost)'
     )
+    parser.add_argument(
+        '--db-only-classification',
+        action='store_true',
+        help='Use DB-only classification (never call the LLM)'
+    )
+    parser.add_argument(
+        '--db-only-similarity-threshold',
+        type=float,
+        default=0.8,
+        help='Similarity threshold (0-1) for accepting DB-only vector matches (default: 0.8)'
+    )
     
     args = parser.parse_args()
     
@@ -823,6 +902,8 @@ Examples:
     ticker = args.ticker.upper()
     years = args.years if args.years else [2023, 2024, 2025]
     use_llm = args.use_llm
+    db_only_classification = args.db_only_classification
+    db_only_similarity_threshold = args.db_only_similarity_threshold
     
     # Validate years
     if len(years) < 2:
@@ -896,10 +977,16 @@ Examples:
     print(f"Company: {ticker}")
     print(f"Years: {', '.join(map(str, years))}")
     print(f"LLM Classification: {'Enabled' if use_llm else 'Disabled'}")
+    print(f"DB-only Classification: {'Enabled' if db_only_classification else 'Disabled'}")
     print(f"{'='*60}\n")
     
     # Initialize pipeline
-    pipeline = IntegrationPipeline(persist_path="./chroma_db", use_llm=use_llm)
+    pipeline = IntegrationPipeline(
+        persist_path="./chroma_db",
+        use_llm=use_llm,
+        db_only_classification=db_only_classification,
+        db_only_similarity_threshold=db_only_similarity_threshold
+    )
     
     # Analyze each filing
     results = []

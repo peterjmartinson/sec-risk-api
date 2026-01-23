@@ -34,6 +34,7 @@ from sigmak.scoring import RiskScorer, RiskScore
 from sigmak.risk_classifier import RiskClassifierWithLLM
 from sigmak.llm_classifier import GeminiClassifier
 from sigmak.llm_storage import LLMStorage
+from sigmak.drift_detection import DriftDetectionSystem, ClassificationSource
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +139,9 @@ class IntegrationPipeline:
     def __init__(
         self,
         persist_path: str = "./database",
-        use_llm: bool = False
+        use_llm: bool = False,
+        db_only_classification: bool = False,
+        db_only_similarity_threshold: float = 0.8
     ) -> None:
         """
         Initialize integration pipeline.
@@ -149,10 +152,16 @@ class IntegrationPipeline:
         """
         self.persist_path = persist_path
         self.use_llm = use_llm
+        # When True, classifier will only consult the vector DB and never call the LLM
+        self.db_only_classification = db_only_classification
+        # Similarity threshold (0-1) for accepting a DB match in DB-only mode
+        self.db_only_similarity_threshold = db_only_similarity_threshold
         
         # Initialize sub-components
         self.indexing_pipeline = IndexingPipeline(persist_path=persist_path)
         self.scorer = RiskScorer()
+        # Lazy-load DriftDetectionSystem for persisting LLM classifications
+        self._drift_system: Optional[DriftDetectionSystem] = None
         
         # Lazy-load classifiers only when needed
         self._llm_classifier: Optional[RiskClassifierWithLLM] = None
@@ -167,6 +176,20 @@ class IntegrationPipeline:
             logger.info("Initializing Gemini classifier...")
             self._gemini_classifier = GeminiClassifier()
         return self._gemini_classifier
+
+    @property
+    def drift_system(self) -> DriftDetectionSystem:
+        """Lazily create a DriftDetectionSystem instance for persistence."""
+        if self._drift_system is None:
+            db_path = str(Path(self.persist_path) / "risk_classifications.db")
+            chroma_path = str(self.persist_path)
+            # Use default embedding model consistent with IndexingPipeline
+            self._drift_system = DriftDetectionSystem(
+                db_path=db_path,
+                chroma_path=chroma_path,
+                embedding_model="all-MiniLM-L6-v2",
+            )
+        return self._drift_system
     
     @property
     def llm_classifier(self) -> RiskClassifierWithLLM:
@@ -191,7 +214,8 @@ class IntegrationPipeline:
         html_path: str,
         ticker: str,
         filing_year: int,
-        retrieve_top_k: int = 10
+        retrieve_top_k: int = 10,
+        rerank: bool = True
     ) -> RiskAnalysisResult:
         """
         Analyze a SEC filing end-to-end.
@@ -252,11 +276,12 @@ class IntegrationPipeline:
         
         # Step 3: Retrieve top-k risk chunks
         try:
-            logger.info(f"Retrieving top {retrieve_top_k} risks for {ticker}")
+            logger.info(f"Retrieving top {retrieve_top_k} risks for {ticker} (rerank={rerank})")
             search_results = self.indexing_pipeline.semantic_search(
                 query="risk factors financial operational regulatory geopolitical",
                 n_results=retrieve_top_k,
-                where={"ticker": ticker, "filing_year": filing_year}
+                where={"ticker": ticker, "filing_year": filing_year},
+                rerank=rerank
             )
         except Exception as e:
             raise IntegrationError(f"Semantic search failed: {e}") from e
@@ -287,13 +312,41 @@ class IntegrationPipeline:
                     "metadata": chunk["metadata"]
                 }
                 
-                # Optional: Classify with LLM
-                if self.use_llm:
-                    logger.info(f"Classifying risk with LLM...")
-                    llm_classification = self._classify_risk_with_llm(
-                        chunk=chunk,
-                        vector_metadata=chunk.get("metadata")
-                    )
+                # Optional: Classify via DB-only or LLM depending on flags
+                if self.db_only_classification:
+                    # DB-only mode: never call the LLM, do a best-effort vector lookup
+                    if not chunk.get("text") or len(chunk.get("text", "").strip()) < 20:
+                        logger.warning("Skipping DB-only classification: chunk text too short or empty")
+                        db_classification = {
+                            'category': 'UNCATEGORIZED',
+                            'confidence': 0.0,
+                            'method': 'skipped',
+                            'llm_result': None
+                        }
+                    else:
+                        logger.info("Classifying risk using DB-only mode (no LLM call)")
+                        db_classification = self._classify_risk_db_only(chunk=chunk)
+
+                    risk_dict["category"] = db_classification["category"]
+                    risk_dict["category_confidence"] = db_classification["confidence"]
+                    risk_dict["classification_method"] = db_classification["method"]
+
+                elif self.use_llm:
+                    # LLM mode: call LLM and persist result as before
+                    if not chunk.get("text") or len(chunk.get("text", "").strip()) < 50:
+                        logger.warning("Skipping LLM classification: chunk text too short or empty")
+                        llm_classification = {
+                            'category': 'UNCATEGORIZED',
+                            'confidence': 0.0,
+                            'method': 'skipped',
+                            'llm_result': None
+                        }
+                    else:
+                        logger.info(f"Classifying risk with LLM...")
+                        llm_classification = self._classify_risk_with_llm(
+                            chunk=chunk,
+                            vector_metadata=chunk.get("metadata")
+                        )
                     risk_dict["category"] = llm_classification["category"]
                     risk_dict["category_confidence"] = llm_classification["confidence"]
                     risk_dict["classification_method"] = llm_classification["method"]
@@ -319,7 +372,8 @@ class IntegrationPipeline:
                 "risks_analyzed": len(risks),
                 "total_latency_ms": elapsed_ms,
                 "index_latency_ms": index_stats.get("embedding_latency_ms", 0),
-                "retrieve_top_k": retrieve_top_k
+                "retrieve_top_k": retrieve_top_k,
+                "rerank": rerank
             }
         )
         
@@ -351,7 +405,21 @@ class IntegrationPipeline:
         try:
             # Call Gemini directly (bypasses vector threshold logic)
             result = self.gemini_classifier.classify(text=chunk["text"])
-            
+
+            # Persist the LLM classification to SQLite + ChromaDB
+            try:
+                # Generate embedding for the chunk
+                embedding = self.indexing_pipeline.embeddings.encode([chunk["text"]])[0].tolist()
+                record_id, chroma_id = self.drift_system.insert_classification(
+                    text=chunk["text"],
+                    embedding=embedding,
+                    llm_result=result,
+                    source=ClassificationSource.LLM,
+                )
+                logger.info("Classification embedded into vector storage")
+            except Exception:
+                logger.exception("Failed to persist LLM classification to vector storage")
+
             return {
                 'category': result.category.value,
                 'confidence': result.confidence,
@@ -364,6 +432,57 @@ class IntegrationPipeline:
             }
         except Exception as e:
             logger.warning(f"LLM classification failed: {e}")
+            return {
+                'category': 'UNCATEGORIZED',
+                'confidence': 0.0,
+                'method': 'error',
+                'llm_result': None
+            }
+
+    def _classify_risk_db_only(
+        self,
+        chunk: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Best-effort classification using only existing database/vector-store entries.
+
+        Returns a dict with 'category', 'confidence', 'method', 'llm_result'. No LLM
+        call is made from this method.
+        """
+        try:
+            # Generate embedding for the chunk
+            embedding = self.indexing_pipeline.embeddings.encode([chunk["text"]])[0].tolist()
+
+            # Query the DriftDetectionSystem for similar cached classifications
+            results = self.drift_system.similarity_search(query_embedding=embedding, n_results=1)
+
+            if not results:
+                return {
+                    'category': 'UNCATEGORIZED',
+                    'confidence': 0.0,
+                    'method': 'db_only_no_match',
+                    'llm_result': None
+                }
+
+            top = results[0]
+            similarity = top.get('similarity_score', 0.0)
+
+            if similarity >= self.db_only_similarity_threshold:
+                return {
+                    'category': top.get('category', 'UNCATEGORIZED'),
+                    'confidence': float(top.get('confidence', 0.0)),
+                    'method': 'vector_db',
+                    'llm_result': None
+                }
+            else:
+                return {
+                    'category': 'UNCATEGORIZED',
+                    'confidence': float(top.get('confidence', 0.0)),
+                    'method': 'db_only_low_similarity',
+                    'llm_result': None
+                }
+        except Exception as e:
+            logger.exception(f"DB-only classification failed: {e}")
             return {
                 'category': 'UNCATEGORIZED',
                 'confidence': 0.0,
@@ -437,7 +556,8 @@ class IntegrationPipeline:
                 results = self.indexing_pipeline.semantic_search(
                     query="risk factors",
                     n_results=20,  # Get more historical context
-                    where={"ticker": ticker, "filing_year": year}
+                    where={"ticker": ticker, "filing_year": year},
+                    rerank=True
                 )
                 historical_chunks.extend(results)
             except Exception as e:

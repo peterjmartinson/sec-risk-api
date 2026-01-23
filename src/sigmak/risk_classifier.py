@@ -166,69 +166,84 @@ class RiskClassifierWithLLM:
                     timestamp=timestamp
                 )
         
-        # Step 2: Perform vector search
-        search_results = self.pipeline.semantic_search(
-            query=text,
-            n_results=1  # Only need top result
-        )
+        # Step 2: Search unified collection for classified chunks
+        # Generate embedding for the query text
+        query_embedding = self.embedding_engine.encode([text])[0]
+        query_embedding_list = query_embedding.tolist() if hasattr(query_embedding, 'tolist') else query_embedding
         
-        if not search_results:
-            # No vector results - must use LLM
-            logger.info("No vector search results - using LLM")
-            return self._classify_with_llm(text, 0.0, timestamp)
-        
-        top_result = search_results[0]
-        distance = top_result["distance"]
-        
-        # Convert distance to similarity score
-        # ChromaDB cosine distance range: [0, 2]
-        # Lower distance = more similar
-        # Convert to similarity: [1.0 (identical), 0.0 (opposite)]
-        similarity_score = 1.0 - (distance / 2.0)
-        
-        logger.info(
-            f"Vector search result: distance={distance:.4f}, "
-            f"similarity={similarity_score:.4f}"
-        )
-        
-        # Step 3: Apply threshold logic
-        if similarity_score >= self.high_threshold:
-            # High confidence - use vector search result
-            logger.info(f"High confidence ({similarity_score:.2f} >= {self.high_threshold})")
-            category = self._extract_category_from_metadata(top_result["metadata"])
+        # Query ChromaDB directly for classified chunks only
+        # Note: Using $ne "" instead of $ne None because ChromaDB doesn't support None in filters
+        try:
+            search_results = self.pipeline.collection.query(
+                query_embeddings=[query_embedding_list],
+                n_results=5,  # Get top 5 to find best classified match
+                where={"category": {"$ne": ""}}  # Only classified chunks (non-empty category)
+            )
             
-            return RiskClassificationResult(
-                text=text,
-                category=category,
-                confidence=similarity_score,
-                method="vector_search",
-                similarity_score=similarity_score,
-                llm_result=None,
-                cached=False,
-                timestamp=timestamp
-            )
+            classified_matches = []
+            if search_results['ids'] and len(search_results['ids'][0]) > 0:
+                for i in range(len(search_results['ids'][0])):
+                    distance = search_results['distances'][0][i]
+                    similarity_score = 1.0 - (distance / 2.0)  # Convert to [0, 1]
+                    
+                    classified_matches.append({
+                        "metadata": search_results['metadatas'][0][i],
+                        "distance": distance,
+                        "similarity_score": similarity_score,
+                        "text": search_results['documents'][0][i]
+                    })
+            
+            if classified_matches:
+                top_match = classified_matches[0]
+                similarity_score = top_match["similarity_score"]
+                
+                logger.info(
+                    f"Found classified chunk: similarity={similarity_score:.4f}, "
+                    f"category={top_match['metadata'].get('category')}"
+                )
+                
+                # Step 3: Apply threshold logic
+                if similarity_score >= self.high_threshold:
+                    # High confidence - use cached classification
+                    category = self._extract_category_from_metadata(top_match["metadata"])
+                    
+                    logger.info(
+                        f"High confidence ({similarity_score:.2f} >= {self.high_threshold}) - "
+                        f"using cached classification"
+                    )
+                    
+                    return RiskClassificationResult(
+                        text=text,
+                        category=category,
+                        confidence=similarity_score,
+                        method="vector_search",
+                        similarity_score=similarity_score,
+                        llm_result=None,
+                        cached=True,
+                        timestamp=timestamp
+                    )
+                else:
+                    logger.info(
+                        f"Low/uncertain confidence ({similarity_score:.2f} < {self.high_threshold}) - "
+                        f"falling back to LLM"
+                    )
+            else:
+                logger.info("No classified chunks found - falling back to LLM")
         
-        elif similarity_score < self.low_threshold:
-            # Low confidence - fall back to LLM
-            logger.info(
-                f"Low confidence ({similarity_score:.2f} < {self.low_threshold}) - "
-                f"falling back to LLM"
-            )
-            return self._classify_with_llm(text, similarity_score, timestamp)
+        except Exception as e:
+            logger.warning(f"Error searching classified chunks: {e} - falling back to LLM")
         
-        else:
-            # Uncertain - use LLM for confirmation
-            logger.info(
-                f"Uncertain confidence ({self.low_threshold} <= {similarity_score:.2f} < "
-                f"{self.high_threshold}) - using LLM for confirmation"
-            )
-            return self._classify_with_llm(text, similarity_score, timestamp)
+        # Step 4: Fall back to LLM
+        return self._classify_with_llm(text, 0.0, timestamp)
     
     def _classify_with_llm(
         self,
         text: str,
         vector_similarity: float,
-        timestamp: datetime
+        timestamp: datetime,
+        ticker: Optional[str] = None,
+        filing_year: Optional[int] = None,
+        chunk_index: Optional[int] = None
     ) -> RiskClassificationResult:
         """
         Classify using Gemini LLM and store result.
@@ -237,6 +252,9 @@ class RiskClassifierWithLLM:
             text: Risk paragraph text
             vector_similarity: Similarity score from vector search
             timestamp: Classification timestamp
+            ticker: Optional ticker (if known, will update unified collection)
+            filing_year: Optional filing year (if known)
+            chunk_index: Optional chunk index (if known)
         
         Returns:
             RiskClassificationResult
@@ -249,7 +267,7 @@ class RiskClassifierWithLLM:
         # Handle both numpy arrays and lists (for testing)
         embedding = embedding_result.tolist() if hasattr(embedding_result, 'tolist') else embedding_result
         
-        # Store in cache
+        # Store in SQLite cache (legacy)
         storage_record = LLMStorageRecord(
             text=text,
             embedding=embedding,
@@ -265,6 +283,28 @@ class RiskClassifierWithLLM:
         )
         
         self.llm_storage.insert(storage_record)
+        
+        # Update unified collection if we have chunk identifiers
+        if ticker and filing_year is not None and chunk_index is not None:
+            try:
+                self.pipeline.update_chunk_classification(
+                    ticker=ticker,
+                    filing_year=filing_year,
+                    chunk_index=chunk_index,
+                    category=llm_result.category.value,
+                    confidence=llm_result.confidence,
+                    source="llm",
+                    model_version=llm_result.model_version,
+                    prompt_version=llm_result.prompt_version
+                )
+                logger.info(
+                    f"Updated unified collection for {ticker}_{filing_year}_{chunk_index}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to update unified collection: {e} - "
+                    f"classification still cached in SQLite"
+                )
         
         logger.info(
             f"LLM classification stored: category={llm_result.category.value}, "
@@ -286,24 +326,19 @@ class RiskClassifierWithLLM:
         """
         Extract risk category from search result metadata.
         
-        This is a placeholder - in the current implementation, metadata contains
-        ticker/filing_year/item_type but not category. For now, we default to OTHER.
-        
         Args:
             metadata: Search result metadata
         
         Returns:
             RiskCategory enum
-        """
-        # TODO: If metadata contains category, extract it
-        # For now, default to OTHER as vector search doesn't store categories
-        if "category" in metadata:
-            return validate_category(metadata["category"])
         
-        logger.warning(
-            "Vector search result does not contain category - defaulting to OTHER"
-        )
-        return RiskCategory.OTHER
+        Raises:
+            ValueError: If metadata missing category or category invalid
+        """
+        if "category" not in metadata or metadata["category"] is None:
+            raise ValueError("Metadata missing category field")
+        
+        return validate_category(metadata["category"])
     
     def classify_batch(
         self,
