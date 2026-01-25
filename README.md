@@ -18,6 +18,9 @@ high-dimensional vector space for semantic analysis.
 - **Async Task Processing**: Non-blocking API with Celery + Redis for production deployments
 - **Embedding Versioning**: Archive and migrate embeddings when models change
 
+- **Peer Discovery DB**: A lightweight `peers` SQLite table stores peer metadata (ticker, CIK, SIC, industry, market_cap). Upserts now preserve existing `market_cap` when an incoming update has no market-cap data to avoid accidental NULL overwrites.
+ - **Peer Discovery DB**: A lightweight `peers` SQLite table stores peer metadata (ticker, CIK, SIC, industry, market_cap) and richer metadata (company name, SIC description, state of incorporation, recent filing dates). A new one-time `prefetch_peers` backfill utility parses cached `data/peer_discovery/submissions_*.json` files to populate the table; `PeerDiscoveryService` now prefers DB-first discovery to avoid thousands of live SEC calls.
+
 ## System Architecture
 
 The application follows a modular "Extraction-to-Storage" flow with **asynchronous task processing**:

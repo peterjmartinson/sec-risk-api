@@ -29,6 +29,7 @@ dependencies = [
     "google-genai>=0.2.0",
     "apscheduler>=3.10.0",
     "pyyaml>=6.0.3",
+    "yfinance>=1.1.0",
 ]
 
 [build-system]

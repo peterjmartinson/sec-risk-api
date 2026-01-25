@@ -1,3 +1,41 @@
+## [2026-01-24] Peer Discovery: Preserve market_cap on upsert
+
+### Status: COMPLETE ✓
+
+### Summary
+Fixed a bug where peer discovery upserts could unintentionally overwrite a previously-populated `market_cap` with NULL when refreshing peers without market data.
+
+### What I changed
+- `src/sigmak/filings_db.py::upsert_peer`: Use `COALESCE(excluded.market_cap, market_cap)` in the `ON CONFLICT` update so incoming NULL market caps do not erase existing values.
+
+### Actions
+- Re-ran `populate_market_cap` for peers with NULL `market_cap`; updated 648 rows.
+
+
+## [2026-01-25] Prefetch: fetch missing submissions when requested
+
+### Status: COMPLETE ✓
+
+### Summary
+Extended `src/sigmak/prefetch_peers.py::prefetch_from_cache` with a `fetch_missing` option. When enabled, the prefetch utility reads existing `submissions_*.json` files and will call the SEC (via `PeerDiscoveryService.get_company_submissions(..., write_cache=True)`) for companies missing a local submissions JSON, write the fetched JSON into the cache directory, and upsert the results into the `peers` table.
+
+### How to use
+- Read-only backfill from existing cache:
+
+```
+PYTHONPATH=src python -m sigmak.prefetch_peers --cache-dir data/peer_discovery --db database/sec_filings.db
+```
+
+- Backfill + fetch missing (idempotent, optional `--max-fetch` to limit downloads):
+
+```
+PYTHONPATH=src python -m sigmak.prefetch_peers --cache-dir data/peer_discovery --db database/sec_filings.db --fetch-missing --max-fetch 100
+```
+
+### Notes
+- Fetching is opt-in to avoid accidental large SEC downloads; fetched files are written to the cache directory.
+
+
 ## [2026-01-24] Markdown → PDF Converter (WeasyPrint) — Starter Integration
 
 ### Status: COMPLETE ✓
