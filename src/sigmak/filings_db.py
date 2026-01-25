@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
+import time
 
 
 DEFAULT_DB_PATH = os.environ.get("SIGMAK_FILINGS_DB", "./database/sec_filings.db")
@@ -188,3 +189,133 @@ def get_identifiers(
             writer.writerow([datetime.utcnow().isoformat(), ticker.upper(), filing_year, ";".join(missing_reasons)])
 
     return result
+
+
+def ensure_peers_table(db_path: str = DEFAULT_DB_PATH) -> None:
+    """Create the peers table used for peer discovery indexing."""
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        # If peers table doesn't exist, create with NOT NULL last_updated defaulting to now
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='peers'")
+        if not cursor.fetchone():
+            cursor.execute(
+                """
+                CREATE TABLE peers (
+                    ticker TEXT PRIMARY KEY,
+                    cik TEXT,
+                    sic TEXT,
+                    industry TEXT,
+                    market_cap REAL,
+                    last_updated INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+                )
+                """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_peers_sic ON peers(sic)")
+            conn.commit()
+            return
+
+        # If table exists, ensure last_updated is NOT NULL. If it's nullable or missing,
+        # perform a migration to a new table with the NOT NULL constraint and copy data.
+        cursor.execute("PRAGMA table_info('peers')")
+        cols = cursor.fetchall()
+        col_names = [c[1] for c in cols]
+        last_updated_info = None
+        for c in cols:
+            if c[1] == "last_updated":
+                last_updated_info = c
+                break
+
+        needs_migration = False
+        if last_updated_info is None:
+            needs_migration = True
+        else:
+            # PRAGMA table_info returns notnull flag at index 3
+            notnull_flag = last_updated_info[3]
+            if notnull_flag == 0:
+                needs_migration = True
+
+        if not needs_migration:
+            # table exists and last_updated is already NOT NULL
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_peers_sic ON peers(sic)")
+            conn.commit()
+            return
+
+        # perform migration: create new table, copy rows, and replace
+        cursor.execute(
+            """
+            CREATE TABLE peers_new (
+                ticker TEXT PRIMARY KEY,
+                cik TEXT,
+                sic TEXT,
+                industry TEXT,
+                market_cap REAL,
+                last_updated INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+            )
+            """
+        )
+
+        # copy existing data, setting last_updated to existing value or now()
+        cursor.execute(
+            """
+            INSERT INTO peers_new(ticker,cik,sic,industry,market_cap,last_updated)
+            SELECT
+                ticker,cik,sic,industry,market_cap, COALESCE(last_updated, strftime('%s','now'))
+            FROM peers
+            """
+        )
+
+        cursor.execute("DROP TABLE peers")
+        cursor.execute("ALTER TABLE peers_new RENAME TO peers")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_peers_sic ON peers(sic)")
+        conn.commit()
+
+
+def upsert_peer(
+    db_path: str,
+    ticker: str,
+    cik: Optional[str],
+    sic: Optional[str],
+    industry: Optional[str] = None,
+    market_cap: Optional[float] = None,
+    last_updated: Optional[int] = None,
+) -> None:
+    """Insert or update a peer row."""
+    ensure_peers_table(db_path)
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        ts = int(time.time())
+        if last_updated is None:
+            last_updated = ts
+
+        cursor.execute(
+            """
+            INSERT INTO peers(ticker,cik,sic,industry,market_cap,last_updated)
+            VALUES(?,?,?,?,?,?)
+            ON CONFLICT(ticker) DO UPDATE SET
+                cik=excluded.cik,
+                sic=excluded.sic,
+                industry=excluded.industry,
+                market_cap=excluded.market_cap,
+                last_updated=excluded.last_updated
+            """,
+            (ticker.upper(), cik, sic, industry, market_cap, last_updated),
+        )
+        conn.commit()
+
+
+def get_peers_by_sic(db_path: str, sic: str, limit: Optional[int] = None) -> List[Dict[str, Optional[str]]]:
+    """Return list of peer rows matching SIC ordered by market_cap desc (NULLs last)."""
+    if not Path(db_path).exists():
+        return []
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        query = "SELECT ticker,cik,sic,industry,market_cap FROM peers WHERE sic = ? ORDER BY market_cap DESC NULLS LAST"
+        params = [sic]
+        if limit:
+            query += " LIMIT ?"
+            params.append(limit)
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        return [ {"ticker": r["ticker"], "cik": r["cik"], "sic": r["sic"], "industry": r["industry"], "market_cap": r["market_cap"]} for r in rows ]

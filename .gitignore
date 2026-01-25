@@ -246,6 +246,9 @@ database/*
 # Downloaded SEC filings (keep data/samples/ tracked for tests)
 data/filings/
 
+# Peer discovery cache (generated JSON files)
+data/peer_discovery/
+
 # Generated reports and analysis results
 output/
 
