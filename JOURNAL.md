@@ -36,6 +36,31 @@ PYTHONPATH=src python -m sigmak.prefetch_peers --cache-dir data/peer_discovery -
 - Fetching is opt-in to avoid accidental large SEC downloads; fetched files are written to the cache directory.
 
 
+## [2026-01-25] Peer Downloader: download peers + target 10-Ks (Issue #83)
+
+### Status: COMPLETE ✓
+
+### Summary
+Added a small CLI utility to select industry peers by strict 4-digit SIC and download the latest (or specified-year) 10-K filings for a target and its peers. The tool reuses the existing `TenKDownloader` for discovery, download, and SQLite tracking.
+
+### What I changed
+- Added: `scripts/download_peers_and_target.py` — selects up to 6 peers by strict SIC (tie-breakers: filing availability, market-cap proximity, recency) and downloads 10-K HTMLs. Defaults to the latest available 10-K per company when `--year` is omitted.
+- Added tests: `tests/test_download_peers_and_target.py` — unit tests for selection logic and download behavior (mocked TenKDownloader/SEC fetches).
+- Updated docs: `documentation/feature-peer-comparison/ISSUE83_PEER_DOWNLOAD.md` with strict‑SIC selection policy and usage notes.
+
+### How to use
+Examples:
+```
+PYTHONPATH=src python scripts/download_peers_and_target.py AAPL        # latest per-company
+PYTHONPATH=src python scripts/download_peers_and_target.py AAPL --year 2024  # specific year
+PYTHONPATH=src python scripts/download_peers_and_target.py AAPL --max-peers 6 --require-filing-year --force-refresh --verbose
+```
+
+### Notes
+- The script leverages the `peers` SQLite table populated by `prefetch_peers` / `PeerDiscoveryService` and will upsert target info on-demand when needed. It is idempotent and records downloads in `database/sec_filings.db`.
+- Tests added and passing locally. Recommend CI hook to include the new tests.
+
+
 ## [2026-01-24] Markdown → PDF Converter (WeasyPrint) — Starter Integration
 
 ### Status: COMPLETE ✓
