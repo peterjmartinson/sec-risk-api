@@ -24,6 +24,7 @@ from typing import Dict, List, Tuple
 from dotenv import load_dotenv
 
 from sigmak.integration import IntegrationPipeline, IntegrationError, RiskAnalysisResult
+from sigmak.text_utils import clean_text
 from sigmak.downloads.tenk_downloader import TenKDownloader, resolve_ticker_to_cik, fetch_company_submissions
 from sigmak.peer_discovery import PeerDiscoveryService
 
@@ -190,11 +191,11 @@ def generate_markdown_report(target: str, year: int, results: List[RiskAnalysisR
     def tokenize(s: str):
         return set(re.findall(r"\w+", (s or "").lower()))
 
-    target_risks = [r.get("text", "") for r in target_result.risks]
+    target_risks = [clean_text(r.get("text", "")) for r in target_result.risks]
     peer_risks = []
     for pr in peer_results:
         for r in pr.risks:
-            peer_risks.append((pr.ticker.upper(), r.get("text", "")))
+            peer_risks.append((pr.ticker.upper(), clean_text(r.get("text", ""))))
 
     unique_previews = []
     shared_entries = []
@@ -249,7 +250,8 @@ def generate_markdown_report(target: str, year: int, results: List[RiskAnalysisR
     # --- Additional comparisons requested in ISSUE #82
     # Aggregate texts
     def normalize_text(s: str) -> str:
-        return re.sub(r"\s+", " ", s.strip()).replace('\n', ' ')
+        # Use the central cleaner then collapse whitespace
+        return clean_text(s)
 
     def sentences(text: str):
         # naive sentence split
@@ -259,7 +261,7 @@ def generate_markdown_report(target: str, year: int, results: List[RiskAnalysisR
     def words(text: str):
         return re.findall(r"\w+", text.lower())
 
-    company_texts = {r.ticker.upper(): "\n".join([k.get("text", "") for k in r.risks]) for r in results}
+    company_texts = {r.ticker.upper(): "\n".join([clean_text(k.get("text", "")) for k in r.risks]) for r in results}
 
     target_text = company_texts.get(target.upper(), "")
 
@@ -462,7 +464,9 @@ def generate_markdown_report(target: str, year: int, results: List[RiskAnalysisR
         import yaml
 
         with yaml_path.open("w", encoding="utf-8") as fh:
-            yaml.safe_dump(data, fh, sort_keys=False)
+            # allow_unicode ensures characters like bullets and non-ASCII
+            # punctuation are written as Unicode rather than \x escapes.
+            yaml.safe_dump(data, fh, sort_keys=False, allow_unicode=True)
     except Exception:
         def _dump_yaml(obj, indent=0):
             pad = "  " * indent
