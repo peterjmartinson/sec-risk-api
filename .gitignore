@@ -251,6 +251,8 @@ data/peer_discovery/
 
 # Generated reports and analysis results
 output/
+# Explicitly ignore YAML outputs produced by reports
+output/*.yaml
 
 # VS Code
 .vscode/*
